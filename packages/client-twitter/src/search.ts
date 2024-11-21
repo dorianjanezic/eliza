@@ -52,24 +52,37 @@ Guidelines for responding to followed accounts:
 
 export class TwitterSearchClient extends ClientBase {
     private respondedTweets: Set<string> = new Set();
+    private isSearchTurn: boolean = true;  // Toggle between search and followed accounts
 
     constructor(runtime: IAgentRuntime) {
-        // Initialize the client and pass an optional callback to be called when the client is ready
         super({
             runtime,
         });
     }
 
     async onReady() {
-        this.engageWithSearchTermsLoop();
+        // Start single engagement loop
+        this.startEngagementLoop();
     }
 
-    private engageWithSearchTermsLoop() {
-        this.engageWithSearchTerms();
+    private startEngagementLoop() {
+        this.engage();
         setTimeout(
-            () => this.engageWithSearchTermsLoop(),
-            (Math.floor(Math.random() * (4 - 2 + 1)) + 5) * 60 * 1000
+            () => this.startEngagementLoop(),
+            (Math.floor(Math.random() * (4 - 2 + 1)) + 6) * 60 * 1000
         );
+    }
+
+    private async engage() {
+        if (this.isSearchTurn) {
+            console.log("Engaging with search terms");
+            await this.engageWithSearchTerms();
+        } else {
+            console.log("Engaging with followed accounts");
+            await this.engageWithFollowedAccounts();
+        }
+        // Toggle for next time
+        this.isSearchTurn = !this.isSearchTurn;
     }
 
     private async engageWithSearchTerms() {
@@ -350,6 +363,147 @@ export class TwitterSearchClient extends ClientBase {
             }
         } catch (error) {
             console.error("Error engaging with search terms:", error);
+        }
+    }
+
+    private async engageWithFollowedAccounts() {
+        console.log("Engaging with followed accounts");
+        try {
+            if (!fs.existsSync("tweetcache")) {
+                fs.mkdirSync("tweetcache");
+            }
+
+            // Wait to avoid rate limiting
+            await wait();
+
+            const homeTimeline = await this.fetchHomeTimeline(50);
+            fs.writeFileSync(
+                "tweetcache/home_timeline.json",
+                JSON.stringify(homeTimeline, null, 2)
+            );
+
+            const formattedHomeTimeline =
+                `# ${this.runtime.character.name}'s Home Timeline\n\n` +
+                homeTimeline
+                    .map((tweet) => {
+                        return `ID: ${tweet.id}\nFrom: ${tweet.name} (@${tweet.username})${tweet.inReplyToStatusId ? ` In reply to: ${tweet.inReplyToStatusId}` : ""}\nText: ${tweet.text}\n---\n`;
+                    })
+                    .join("\n");
+
+            // Filter valid tweets
+            const validTweets = homeTimeline.filter(tweet => {
+                const isReplyToBot = tweet.inReplyToStatusId &&
+                    tweet.thread.find(t =>
+                        t.id === tweet.inReplyToStatusId &&
+                        t.username === this.runtime.getSetting("TWITTER_USERNAME")
+                    );
+                return !isReplyToBot &&
+                    !this.respondedTweets.has(tweet.id) &&
+                    tweet.username !== this.runtime.getSetting("TWITTER_USERNAME");
+            });
+
+            if (validTweets.length === 0) {
+                console.log("No valid tweets found to engage with");
+                return;
+            }
+
+            // Select a random tweet from valid tweets
+            const selectedTweet = validTweets[Math.floor(Math.random() * validTweets.length)];
+            console.log("Selected timeline tweet to reply to:", selectedTweet?.text);
+
+            // Process the selected tweet
+            const conversationId = selectedTweet.conversationId;
+            const roomId = stringToUuid(
+                conversationId + "-" + this.runtime.agentId
+            );
+
+            const userIdUUID = stringToUuid(selectedTweet.userId as string);
+
+            await this.runtime.ensureConnection(
+                userIdUUID,
+                roomId,
+                selectedTweet.username,
+                selectedTweet.name,
+                "twitter"
+            );
+
+            // Build conversation thread
+            await buildConversationThread(selectedTweet, this);
+
+            // Create message object
+            const message = {
+                id: stringToUuid(selectedTweet.id + "-" + this.runtime.agentId),
+                agentId: this.runtime.agentId,
+                content: {
+                    text: selectedTweet.text,
+                    url: selectedTweet.permanentUrl,
+                    inReplyTo: selectedTweet.inReplyToStatusId
+                        ? stringToUuid(
+                            selectedTweet.inReplyToStatusId +
+                            "-" +
+                            this.runtime.agentId
+                        )
+                        : undefined,
+                },
+                userId: userIdUUID,
+                roomId,
+                createdAt: selectedTweet.timestamp * 1000,
+            };
+
+            // Generate and send response using the same logic as engageWithSearchTerms
+            let state = await this.runtime.composeState(message, {
+                twitterClient: this.twitterClient,
+                twitterUserName: this.runtime.getSetting("TWITTER_USERNAME"),
+                timeline: formattedHomeTimeline,
+            });
+
+            const context = composeContext({
+                state,
+                template: this.runtime.character.templates?.twitterSearchTemplate || twitterSearchTemplate,
+            });
+
+            const responseContent = await generateMessageResponse({
+                runtime: this.runtime,
+                context,
+                modelClass: ModelClass.SMALL,
+            });
+
+            responseContent.inReplyTo = message.id;
+
+            if (!responseContent.text) {
+                console.log("No response generated");
+                return;
+            }
+
+            console.log(`Bot would respond to tweet ${selectedTweet.id} with: ${responseContent.text}`);
+
+            try {
+                const callback: HandlerCallback = async (response: Content) => {
+                    const memories = await sendTweet(
+                        this,
+                        response,
+                        message.roomId,
+                        this.runtime.getSetting("TWITTER_USERNAME"),
+                        selectedTweet.id
+                    );
+                    return memories;
+                };
+
+                const responseMessages = await callback(responseContent);
+                this.respondedTweets.add(selectedTweet.id);
+
+                // Save debug info
+                const responseInfo = `Context:\n\n${context}\n\nSelected Post: ${selectedTweet.id} - ${selectedTweet.username}: ${selectedTweet.text}\nAgent's Output:\n${responseContent.text}`;
+                const debugFileName = `tweetcache/tweet_generation_${selectedTweet.id}.txt`;
+                fs.writeFileSync(debugFileName, responseInfo);
+
+                await wait();
+            } catch (error) {
+                console.error(`Error sending response post: ${error}`);
+            }
+
+        } catch (error) {
+            console.error("Error engaging with followed accounts:", error);
         }
     }
 }
