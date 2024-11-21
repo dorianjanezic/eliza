@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@ai16z/plugin-video-generation':
+        specifier: ^0.1.3
+        version: 0.1.3(@google-cloud/vertexai@1.9.0(encoding@0.1.13))(@swc/core@1.9.2(@swc/helpers@0.5.15))(encoding@0.1.13)(postcss@8.4.49)(react@18.3.1)(sswr@2.1.0(svelte@5.2.4))(svelte@5.2.4)(typescript@5.6.3)(whatwg-url@7.1.0)
       ollama-ai-provider:
         specifier: ^0.16.1
         version: 0.16.1(zod@3.23.8)
@@ -90,6 +93,9 @@ importers:
       '@ai16z/plugin-starknet':
         specifier: workspace:*
         version: link:../packages/plugin-starknet
+      '@ai16z/plugin-video-generation':
+        specifier: workspace:*
+        version: link:../packages/plugin-video-generation
       readline:
         specifier: ^1.3.0
         version: 1.3.0
@@ -1052,6 +1058,14 @@ packages:
     peerDependenciesMeta:
       vue:
         optional: true
+
+  '@ai16z/eliza@0.1.3':
+    resolution: {integrity: sha512-MeHvD44YKeYdnmI0k03RpS0COGPUsM5/nYoo7ih9vi7iXWFUWANEa3FReWr8rT51AOdHFXGdaLvTzngI527WjA==}
+
+  '@ai16z/plugin-video-generation@0.1.3':
+    resolution: {integrity: sha512-IMxSbTfVVpi74sa1RZ+7adwgwQOHotga9ENRWkQNUfXOb3QiZ6/N3Gy9Q+PEyb+s1oP4/TdACOKBye7aaVOwjg==}
+    peerDependencies:
+      whatwg-url: 7.1.0
 
   '@algolia/autocomplete-core@1.17.7':
     resolution: {integrity: sha512-BjiPOW6ks90UKl7TwMv7oNQMnzU+t/wk9mgIDi6b1tXpUek7MW0lbNOUHpvam9pe3lVCf4xPFT+lK7s+e+fs7Q==}
@@ -3413,8 +3427,8 @@ packages:
   '@octokit/openapi-types@22.2.0':
     resolution: {integrity: sha512-QBhVjcUa9W7Wwhm6DBFu6ZZ+1/t/oYxqc2tp81Pi41YNuJinbFRx8B133qVOrAaBbF7D/m0Et6f9/pZt9Rc+tg==}
 
-  '@octokit/openapi-webhooks-types@8.4.0':
-    resolution: {integrity: sha512-ooxDnkRsFp07L+k+Giv+Qrmtjy+CnhCwtCDAMyB/hIwB1kIlO32HD1WNDnniezwUt5Rr8bwoPT+Or7PSYHQoOQ==}
+  '@octokit/openapi-webhooks-types@8.5.1':
+    resolution: {integrity: sha512-i3h1b5zpGSB39ffBbYdSGuAd0NhBAwPyA3QV3LYi/lx4lsbZiu7u2UHgXVUR6EpvOI8REOuVh1DZTRfHoJDvuQ==}
 
   '@octokit/plugin-enterprise-rest@6.0.1':
     resolution: {integrity: sha512-93uGjlhUD+iNg1iWhUENAtJata6w5nE+V4urXOAlIXdco6xNZtUSfYY8dzp3Udy74aqO/B5UZL80x/YMa5PKRw==}
@@ -3502,8 +3516,8 @@ packages:
     resolution: {integrity: sha512-yFZa3UH11VIxYnnoOYCVoJ3q4ChuSOk2IVBBQ0O3xtKX4x9bmKb/1t+Mxixv2iUhzMdOl1qeWJqEhouXXzB3rQ==}
     engines: {node: '>= 18'}
 
-  '@octokit/webhooks@13.4.0':
-    resolution: {integrity: sha512-3jQ+/zVgqwUYFqcakZ6BQT1eYql+mK91n4GhjWwdhyuBaLRQ6OHrRRJ26MHus51CqLZ8pwqfRdjc8jTBAeaVnA==}
+  '@octokit/webhooks@13.4.1':
+    resolution: {integrity: sha512-I5YPUtfWidh+OzyrlDahJsUpkpGK0kCTmDRbuqGmlCUzOtxdEkX3R4d6Cd08ijQYwkVXQJanPdbKuZBeV2NMaA==}
     engines: {node: '>= 18'}
 
   '@opendocsg/pdf2md@0.1.31':
@@ -13097,6 +13111,61 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  '@ai16z/eliza@0.1.3(@google-cloud/vertexai@1.9.0(encoding@0.1.13))(encoding@0.1.13)(react@18.3.1)(sswr@2.1.0(svelte@5.2.4))(svelte@5.2.4)':
+    dependencies:
+      '@ai-sdk/anthropic': 0.0.53(zod@3.23.8)
+      '@ai-sdk/google': 0.0.55(zod@3.23.8)
+      '@ai-sdk/google-vertex': 0.0.42(@google-cloud/vertexai@1.9.0(encoding@0.1.13))(zod@3.23.8)
+      '@ai-sdk/groq': 0.0.3(zod@3.23.8)
+      '@ai-sdk/openai': 1.0.0-canary.3(zod@3.23.8)
+      '@anthropic-ai/sdk': 0.30.1(encoding@0.1.13)
+      '@types/uuid': 10.0.0
+      ai: 3.4.33(openai@4.69.0(encoding@0.1.13)(zod@3.23.8))(react@18.3.1)(sswr@2.1.0(svelte@5.2.4))(svelte@5.2.4)(vue@3.5.13(typescript@5.6.3))(zod@3.23.8)
+      anthropic-vertex-ai: 1.0.0(encoding@0.1.13)(zod@3.23.8)
+      fastembed: 1.14.1
+      gaxios: 6.7.1(encoding@0.1.13)
+      glob: 11.0.0
+      js-sha1: 0.7.0
+      ollama-ai-provider: 0.16.1(zod@3.23.8)
+      openai: 4.69.0(encoding@0.1.13)(zod@3.23.8)
+      tiktoken: 1.0.17
+      tinyld: 1.3.4
+      together-ai: 0.7.0(encoding@0.1.13)
+      unique-names-generator: 4.7.1
+      uuid: 11.0.2
+      zod: 3.23.8
+    transitivePeerDependencies:
+      - '@google-cloud/vertexai'
+      - encoding
+      - react
+      - solid-js
+      - sswr
+      - supports-color
+      - svelte
+      - vue
+
+  '@ai16z/plugin-video-generation@0.1.3(@google-cloud/vertexai@1.9.0(encoding@0.1.13))(@swc/core@1.9.2(@swc/helpers@0.5.15))(encoding@0.1.13)(postcss@8.4.49)(react@18.3.1)(sswr@2.1.0(svelte@5.2.4))(svelte@5.2.4)(typescript@5.6.3)(whatwg-url@7.1.0)':
+    dependencies:
+      '@ai16z/eliza': 0.1.3(@google-cloud/vertexai@1.9.0(encoding@0.1.13))(encoding@0.1.13)(react@18.3.1)(sswr@2.1.0(svelte@5.2.4))(svelte@5.2.4)
+      tsup: 8.3.5(@swc/core@1.9.2(@swc/helpers@0.5.15))(jiti@1.21.6)(postcss@8.4.49)(typescript@5.6.3)(yaml@2.6.1)
+      whatwg-url: 7.1.0
+    transitivePeerDependencies:
+      - '@google-cloud/vertexai'
+      - '@microsoft/api-extractor'
+      - '@swc/core'
+      - encoding
+      - jiti
+      - postcss
+      - react
+      - solid-js
+      - sswr
+      - supports-color
+      - svelte
+      - tsx
+      - typescript
+      - vue
+      - yaml
+
   '@algolia/autocomplete-core@1.17.7(@algolia/client-search@5.15.0)(algoliasearch@5.15.0)(search-insights@2.17.3)':
     dependencies:
       '@algolia/autocomplete-plugin-algolia-insights': 1.17.7(@algolia/client-search@5.15.0)(algoliasearch@5.15.0)(search-insights@2.17.3)
@@ -16458,7 +16527,7 @@ snapshots:
       '@octokit/oauth-app': 7.1.3
       '@octokit/plugin-paginate-rest': 11.3.5(@octokit/core@6.1.2)
       '@octokit/types': 13.6.1
-      '@octokit/webhooks': 13.4.0
+      '@octokit/webhooks': 13.4.1
 
   '@octokit/auth-app@7.1.3':
     dependencies:
@@ -16574,7 +16643,7 @@ snapshots:
 
   '@octokit/openapi-types@22.2.0': {}
 
-  '@octokit/openapi-webhooks-types@8.4.0': {}
+  '@octokit/openapi-webhooks-types@8.5.1': {}
 
   '@octokit/plugin-enterprise-rest@6.0.1': {}
 
@@ -16673,9 +16742,9 @@ snapshots:
 
   '@octokit/webhooks-methods@5.1.0': {}
 
-  '@octokit/webhooks@13.4.0':
+  '@octokit/webhooks@13.4.1':
     dependencies:
-      '@octokit/openapi-webhooks-types': 8.4.0
+      '@octokit/openapi-webhooks-types': 8.5.1
       '@octokit/request-error': 6.1.5
       '@octokit/webhooks-methods': 5.1.0
 
@@ -22929,7 +22998,7 @@ snapshots:
 
   log-symbols@4.1.0:
     dependencies:
-      chalk: 4.1.0
+      chalk: 4.1.2
       is-unicode-supported: 0.1.0
 
   log-symbols@6.0.0:

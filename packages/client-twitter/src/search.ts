@@ -21,9 +21,6 @@ const twitterSearchTemplate =
 
 {{providers}}
 
-Recent interactions between {{agentName}} and other users:
-{{recentPostInteractions}}
-
 About {{agentName}} (@{{twitterUserName}}):
 {{bio}}
 {{lore}}
@@ -31,15 +28,25 @@ About {{agentName}} (@{{twitterUserName}}):
 
 {{postDirections}}
 
+Recent interactions between {{agentName}} and other users:
+{{recentPostInteractions}}
+
 {{recentPosts}}
 
-# Task: Respond to the following post in the style and perspective of {{agentName}} (aka @{{twitterUserName}}). Write a {{adjective}} response for {{agentName}} to say directly in response to the post. don't generalize.
+# Task: Analyze and respond to this tweet from an account you follow. Write a {{adjective}} response that adds value to the conversation while staying true to {{agentName}}'s perspective.
 {{currentPost}}
 
 IMPORTANT: Your response CANNOT be longer than 20 words.
 Aim for 1-2 short sentences maximum. Be concise and direct.
 
-Your response should not contain any questions. Brief, concise statements only. No emojis. Use \\n\\n (double spaces) between statements.
+Guidelines for responding to followed accounts:
+- Add meaningful insights or perspectives
+- Stay relevant to the topic
+- Avoid basic agreements or generic responses
+- Maintain your unique voice while being respectful
+- No questions, only statements
+- No emojis
+- Use \\n\\n (double spaces) between statements
 
 ` + messageCompletionFooter;
 
@@ -61,7 +68,7 @@ export class TwitterSearchClient extends ClientBase {
         this.engageWithSearchTerms();
         setTimeout(
             () => this.engageWithSearchTermsLoop(),
-            (Math.floor(Math.random() * (120 - 60 + 1)) + 60) * 60 * 1000
+            (Math.floor(Math.random() * (4 - 2 + 1)) + 5) * 60 * 1000
         );
     }
 
@@ -116,24 +123,25 @@ export class TwitterSearchClient extends ClientBase {
   Here are some tweets related to the search term "${searchTerm}":
   
   ${[...slicedTweets, ...homeTimeline]
-      .filter((tweet) => {
-          // ignore tweets where any of the thread tweets contain a tweet by the bot
-          const thread = tweet.thread;
-          const botTweet = thread.find(
-              (t) => t.username === this.runtime.getSetting("TWITTER_USERNAME")
-          );
-          return !botTweet;
-      })
-      .map(
-          (tweet) => `
+                    .filter((tweet) => {
+                        // Only filter out direct replies to bot's own tweets
+                        const isReplyToBot = tweet.inReplyToStatusId &&
+                            tweet.thread.find(t =>
+                                t.id === tweet.inReplyToStatusId &&
+                                t.username === this.runtime.getSetting("TWITTER_USERNAME")
+                            );
+                        return !isReplyToBot;
+                    })
+                    .map(
+                        (tweet) => `
     ID: ${tweet.id}${tweet.inReplyToStatusId ? ` In reply to: ${tweet.inReplyToStatusId}` : ""}
     From: ${tweet.name} (@${tweet.username})
     Text: ${tweet.text}
   `
-      )
-      .join("\n")}
+                    )
+                    .join("\n")}
   
-  Which tweet is the most interesting and relevant for Ruby to reply to? Please provide only the ID of the tweet in your response.
+  Which tweet is the most interesting and relevant for Komorebi to reply to? Please provide only the ID of the tweet in your response.
   Notes:
     - Respond to English tweets only
     - Respond to tweets that don't have a lot of hashtags, links, URLs or images
@@ -148,7 +156,7 @@ export class TwitterSearchClient extends ClientBase {
             });
 
             const tweetId = mostInterestingTweetResponse.trim();
-            const selectedTweet = slicedTweets.find(
+            const selectedTweet = [...slicedTweets, ...homeTimeline].find(
                 (tweet) =>
                     tweet.id.toString().includes(tweetId) ||
                     tweetId.includes(tweet.id.toString())
@@ -156,7 +164,13 @@ export class TwitterSearchClient extends ClientBase {
 
             if (!selectedTweet) {
                 console.log("No matching tweet found for the selected ID");
-                return console.log("Selected tweet ID:", tweetId);
+                console.log("Selected tweet ID:", tweetId);
+                console.log("Available tweet IDs:",
+                    [...slicedTweets, ...homeTimeline]
+                        .map(t => t.id)
+                        .join(", ")
+                );
+                return;
             }
 
             console.log("Selected tweet to reply to:", selectedTweet?.text);
@@ -195,10 +209,10 @@ export class TwitterSearchClient extends ClientBase {
                     url: selectedTweet.permanentUrl,
                     inReplyTo: selectedTweet.inReplyToStatusId
                         ? stringToUuid(
-                              selectedTweet.inReplyToStatusId +
-                                  "-" +
-                                  this.runtime.agentId
-                          )
+                            selectedTweet.inReplyToStatusId +
+                            "-" +
+                            this.runtime.agentId
+                        )
                         : undefined,
                 },
                 userId: userIdUUID,
@@ -233,13 +247,21 @@ export class TwitterSearchClient extends ClientBase {
             // Generate image descriptions using GPT-4 vision API
             const imageDescriptions = [];
             for (const photo of selectedTweet.photos) {
-                const description = await this.runtime
-                    .getService<IImageDescriptionService>(
+                try {
+                    const imageService = this.runtime.getService<IImageDescriptionService>(
                         ServiceType.IMAGE_DESCRIPTION
-                    )
-                    .getInstance()
-                    .describeImage(photo.url);
-                imageDescriptions.push(description);
+                    );
+
+                    if (imageService && typeof imageService.describeImage === 'function') {
+                        const description = await imageService.describeImage(photo.url);
+                        imageDescriptions.push(description);
+                    } else {
+                        console.log("Image description service not available");
+                    }
+                } catch (error) {
+                    console.error("Error describing image:", error);
+                    continue; // Skip this image but continue with others
+                }
             }
 
             let state = await this.runtime.composeState(message, {
@@ -290,7 +312,7 @@ export class TwitterSearchClient extends ClientBase {
                         response,
                         message.roomId,
                         this.runtime.getSetting("TWITTER_USERNAME"),
-                        tweetId
+                        selectedTweet.id
                     );
                     return memories;
                 };

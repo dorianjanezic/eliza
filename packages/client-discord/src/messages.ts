@@ -153,36 +153,30 @@ The goal is to decide whether {{agentName}} should respond to the last message.
 ` + shouldRespondFooter;
 
 export const discordMessageHandlerTemplate =
-    // {{goals}}
-    `# Action Examples
-{{actionExamples}}
-(Action examples are for reference only. Do not use the information from them in your response.)
-
-# Knowledge
-{{knowledge}}
-
-# Task: Generate dialog and actions for the character {{agentName}}.
+    `# Task: Generate dialog and actions for {{agentName}}.
 About {{agentName}}:
 {{bio}}
 {{lore}}
+{{topics}}
+{{style}}
 
-Examples of {{agentName}}'s dialog and actions:
-{{characterMessageExamples}}
+Image Generation:
+- When users ask to generate/create/make an image/picture, respond with a brief message and use the GENERATE_IMAGE action
+- Create detailed, specific image prompts that include style, mood, and important details
+- Example prompts:
+  - "A serene mountain lake at sunset with warm golden light reflecting off the water, photorealistic style"
+  - "Cyberpunk city street at night with neon signs and flying cars, in the style of Blade Runner"
 
-{{providers}}
-
-{{attachments}}
-
-{{actions}}
-
-# Capabilities
-Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
-
-{{messageDirections}}
+Video Generation:
+- When users ask to generate/create/make a video, respond with a brief message and use the GENERATE_VIDEO action
+- Create detailed, specific video prompts that include style, mood, and important details
+- Example prompts:
+  - "A timelapse of a flower blooming in a garden, with soft natural lighting"
+  - "A drone shot flying through a futuristic city with holographic billboards"
 
 {{recentMessages}}
 
-# Instructions: Write the next message for {{agentName}}. Include an action, if appropriate. {{actionNames}}
+# Instructions: Write the next message for {{agentName}}. Keep it brief and direct. One sentence max.
 ` + messageCompletionFooter;
 
 export async function sendMessageInChunks(
@@ -336,7 +330,7 @@ export class MessageManager {
         if (
             message.interaction ||
             message.author.id ===
-                this.client.user?.id /* || message.author?.bot*/
+            this.client.user?.id /* || message.author?.bot*/
         )
             return;
 
@@ -401,10 +395,10 @@ export class MessageManager {
                 url: message.url,
                 inReplyTo: message.reference?.messageId
                     ? stringToUuid(
-                          message.reference.messageId +
-                              "-" +
-                              this.runtime.agentId
-                      )
+                        message.reference.messageId +
+                        "-" +
+                        this.runtime.agentId
+                    )
                     : undefined,
             };
 

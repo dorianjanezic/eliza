@@ -784,11 +784,7 @@ Text: ${attachment.text}
         let lore = "";
         // Assuming this.lore is an array of lore bits
         if (this.character.lore && this.character.lore.length > 0) {
-            const shuffledLore = [...this.character.lore].sort(
-                () => Math.random() - 0.5
-            );
-            const selectedLore = shuffledLore.slice(0, 10);
-            lore = selectedLore.join("\n");
+            lore = this.character.lore.join("\n");
         }
 
         const formattedCharacterPostExamples = this.character.postExamples
@@ -903,12 +899,9 @@ Text: ${attachment.text}
         // if bio is a string, use it. if its an array, pick one at random
         let bio = this.character.bio || "";
         if (Array.isArray(bio)) {
-            // get three random bio strings and join them with " "
-            bio = bio
-                .sort(() => 0.5 - Math.random())
-                .slice(0, 3)
-                .join(" ");
+            bio = bio.join(" ");
         }
+
 
         async function getKnowledge(
             runtime: AgentRuntime,
@@ -945,12 +938,12 @@ Text: ${attachment.text}
             lore,
             adjective:
                 this.character.adjectives &&
-                this.character.adjectives.length > 0
+                    this.character.adjectives.length > 0
                     ? this.character.adjectives[
-                          Math.floor(
-                              Math.random() * this.character.adjectives.length
-                          )
-                      ]
+                    Math.floor(
+                        Math.random() * this.character.adjectives.length
+                    )
+                    ]
                     : "",
             knowledge: formattedKnowledge,
             // Recent interactions between the sender and receiver, formatted as messages
@@ -963,70 +956,70 @@ Text: ${attachment.text}
             topic:
                 this.character.topics && this.character.topics.length > 0
                     ? this.character.topics[
-                          Math.floor(
-                              Math.random() * this.character.topics.length
-                          )
-                      ]
+                    Math.floor(
+                        Math.random() * this.character.topics.length
+                    )
+                    ]
                     : null,
             topics:
                 this.character.topics && this.character.topics.length > 0
                     ? `${this.character.name} is interested in ` +
-                      this.character.topics
-                          .sort(() => 0.5 - Math.random())
-                          .slice(0, 5)
-                          .map((topic, index) => {
-                              if (index === this.character.topics.length - 2) {
-                                  return topic + " and ";
-                              }
-                              // if last topic, don't add a comma
-                              if (index === this.character.topics.length - 1) {
-                                  return topic;
-                              }
-                              return topic + ", ";
-                          })
-                          .join("")
+                    this.character.topics
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 5)
+                        .map((topic, index) => {
+                            if (index === this.character.topics.length - 2) {
+                                return topic + " and ";
+                            }
+                            // if last topic, don't add a comma
+                            if (index === this.character.topics.length - 1) {
+                                return topic;
+                            }
+                            return topic + ", ";
+                        })
+                        .join("")
                     : "",
             characterPostExamples:
                 formattedCharacterPostExamples &&
-                formattedCharacterPostExamples.replaceAll("\n", "").length > 0
+                    formattedCharacterPostExamples.replaceAll("\n", "").length > 0
                     ? addHeader(
-                          `# Example Posts for ${this.character.name}`,
-                          formattedCharacterPostExamples
-                      )
+                        `# Example Posts for ${this.character.name}`,
+                        formattedCharacterPostExamples
+                    )
                     : "",
             characterMessageExamples:
                 formattedCharacterMessageExamples &&
-                formattedCharacterMessageExamples.replaceAll("\n", "").length >
+                    formattedCharacterMessageExamples.replaceAll("\n", "").length >
                     0
                     ? addHeader(
-                          `# Example Conversations for ${this.character.name}`,
-                          formattedCharacterMessageExamples
-                      )
+                        `# Example Conversations for ${this.character.name}`,
+                        formattedCharacterMessageExamples
+                    )
                     : "",
             messageDirections:
                 this.character?.style?.all?.length > 0 ||
-                this.character?.style?.chat.length > 0
+                    this.character?.style?.chat.length > 0
                     ? addHeader(
-                          "# Message Directions for " + this.character.name,
-                          (() => {
-                              const all = this.character?.style?.all || [];
-                              const chat = this.character?.style?.chat || [];
-                              return [...all, ...chat].join("\n");
-                          })()
-                      )
+                        "# Message Directions for " + this.character.name,
+                        (() => {
+                            const all = this.character?.style?.all || [];
+                            const chat = this.character?.style?.chat || [];
+                            return [...all, ...chat].join("\n");
+                        })()
+                    )
                     : "",
 
             postDirections:
                 this.character?.style?.all?.length > 0 ||
-                this.character?.style?.post.length > 0
+                    this.character?.style?.post.length > 0
                     ? addHeader(
-                          "# Post Directions for " + this.character.name,
-                          (() => {
-                              const all = this.character?.style?.all || [];
-                              const post = this.character?.style?.post || [];
-                              return [...all, ...post].join("\n");
-                          })()
-                      )
+                        "# Post Directions for " + this.character.name,
+                        (() => {
+                            const all = this.character?.style?.all || [];
+                            const post = this.character?.style?.post || [];
+                            return [...all, ...post].join("\n");
+                        })()
+                    )
                     : "",
 
             //old logic left in for reference
@@ -1060,9 +1053,9 @@ Text: ${attachment.text}
             goals:
                 goals && goals.length > 0
                     ? addHeader(
-                          "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
-                          goals
-                      )
+                        "# Goals\n{{agentName}} should prioritize accomplishing the objectives that are in progress.",
+                        goals
+                    )
                     : "",
             goalsData,
             recentMessages:
@@ -1119,16 +1112,16 @@ Text: ${attachment.text}
             actions:
                 actionsData.length > 0
                     ? addHeader(
-                          "# Available Actions",
-                          formatActions(actionsData)
-                      )
+                        "# Available Actions",
+                        formatActions(actionsData)
+                    )
                     : "",
             actionExamples:
                 actionsData.length > 0
                     ? addHeader(
-                          "# Action Examples",
-                          composeActionExamples(actionsData, 10)
-                      )
+                        "# Action Examples",
+                        composeActionExamples(actionsData, 10)
+                    )
                     : "",
             evaluatorsData,
             evaluators:

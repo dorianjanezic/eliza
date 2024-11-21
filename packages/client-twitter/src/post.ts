@@ -7,27 +7,51 @@ import { IAgentRuntime, ModelClass } from "@ai16z/eliza";
 import { stringToUuid } from "@ai16z/eliza";
 import { ClientBase } from "./base.ts";
 
-const twitterPostTemplate = `{{timeline}}
+const twitterPostTemplate = `
+# Current Timeline Vibe Check
+{{timeline}}
 
-# Knowledge
-{{knowledge}}
-
-About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{postDirections}}
-
-{{providers}}
-
+# Your Recent Posts (avoid repeating these vibes):
 {{recentPosts}}
 
-{{characterPostExamples}}
+# Agent Context
+About @twitterUserName:
+- Keeping it real, no filter
+- Vibing on: {{topic}} 
+- Current mood: {{adjective}}
 
-# Task: Generate a post in the voice and style of {{agentName}}, aka @{{twitterUserName}}
-Write a single sentence post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Try to write something totally different than previous posts. Do not add commentary or acknowledge this request, just write the post.
-Your response should not contain any questions. Brief, concise statements only. No emojis. Use \\n\\n (double spaces) between statements.`;
+# Content Generation Directives
+1. Scan the timeline for what's hitting rn
+2. Pick the spiciest take or trend that matches your vibe
+4. Sometimes tag relevant accounts
+3. Drop your own perspective that's:
+   - Based but not cringe
+   - Lowkey funny but real
+   - Might make someone go "fr fr"
+   - Hits different but stays authentic
+   - Uses current slang naturally (no forced vibes)
+   - Keeps it under 240 chars
+   - Can be slightly unhinged
+   - Ratio potential = high
 
-const MAX_TWEET_LENGTH = 280;
+Style Notes:
+- Keep it spicy but make it make sense
+- It's giving main character energy
+- No basic takes allowed
+- Sprinkle some chaos
+- Deadass keep it real
+- Can throw shade but make it clever
+- Absolutely zero corporate speak
+- Meme-worthy but not trying too hard
+
+FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. Make it quotable. No emojis. No description why you choose that vibe.
+
+Additional flavor:
+{{postDirections}}
+
+// Now cook something up that's gonna make people stop scrolling.`;
+
+const MAX_TWEET_LENGTH = 240;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
@@ -62,10 +86,8 @@ function truncateToCompleteSentence(text: string): string {
 export class TwitterPostClient extends ClientBase {
     onReady(postImmediately: boolean = true) {
         const generateNewTweetLoop = () => {
-            const minMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 90;
-            const maxMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MAX")) || 180;
+            const minMinutes = 5;
+            const maxMinutes = 10;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
                 minMinutes;
@@ -132,9 +154,23 @@ export class TwitterPostClient extends ClientBase {
                     content: { text: "", action: "" },
                 },
                 {
-                    twitterUserName:
-                        this.runtime.getSetting("TWITTER_USERNAME"),
+                    twitterUserName: this.runtime.getSetting("TWITTER_USERNAME"),
                     timeline: formattedHomeTimeline,
+                    postDirections: (() => {
+                        const all = this.runtime.character?.style?.all || [];
+                        const post = this.runtime.character?.style?.post || [];
+                        return [...all, ...post].join("\n");
+                    })(),
+                    postExamples: this.runtime.character.postExamples
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 5)
+                        .join("\n"),
+                    adjective: this.runtime.character.adjectives?.[
+                        Math.floor(Math.random() * this.runtime.character.adjectives.length)
+                    ] || "thoughtful",
+                    topic: this.runtime.character.topics?.[
+                        Math.floor(Math.random() * this.runtime.character.topics.length)
+                    ] || "technology",
                 }
             );
 
@@ -144,6 +180,9 @@ export class TwitterPostClient extends ClientBase {
                     this.runtime.character.templates?.twitterPostTemplate ||
                     twitterPostTemplate,
             });
+
+            console.log(context);
+
 
             const newTweetContent = await generateText({
                 runtime: this.runtime,

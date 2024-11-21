@@ -22,6 +22,8 @@ import fs from "fs";
 import readline from "readline";
 import yargs from "yargs";
 import { character } from "./character.ts";
+import { imageGenerationPlugin } from "@ai16z/plugin-image-generation";
+import { videoGenerationPlugin } from "@ai16z/plugin-video-generation";
 
 export const wait = (minTime: number = 1000, maxTime: number = 3000) => {
     const waitTime =
@@ -227,6 +229,8 @@ export async function createAgent(
         plugins: [
             bootstrapPlugin,
             nodePlugin,
+            imageGenerationPlugin,
+            videoGenerationPlugin,
             character.settings.secrets?.WALLET_PUBLIC_KEY ? solanaPlugin : null,
         ].filter(Boolean),
         providers: [],

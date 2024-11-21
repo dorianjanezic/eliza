@@ -748,103 +748,28 @@ export const generateImage = async (
         count = 1;
     }
 
-    const model = getModel(runtime.character.modelProvider, ModelClass.IMAGE);
-    const modelSettings = models[runtime.character.modelProvider].imageSettings;
-    const apiKey =
-        runtime.token ??
-        runtime.getSetting("HEURIST_API_KEY") ??
-        runtime.getSetting("TOGETHER_API_KEY") ??
-        runtime.getSetting("OPENAI_API_KEY");
+    const apiKey = runtime.getSetting("OPENAI_API_KEY");
     try {
-        if (runtime.character.modelProvider === ModelProviderName.HEURIST) {
-            const response = await fetch(
-                "http://sequencer.heurist.xyz/submit_job",
-                {
-                    method: "POST",
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`,
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        job_id: data.jobId || crypto.randomUUID(),
-                        model_input: {
-                            SD: {
-                                prompt: data.prompt,
-                                neg_prompt: data.negativePrompt,
-                                num_iterations: data.numIterations || 20,
-                                width: data.width || 512,
-                                height: data.height || 512,
-                                guidance_scale: data.guidanceScale || 3,
-                                seed: data.seed || -1,
-                            },
-                        },
-                        model_id: data.modelId || "FLUX.1-dev",
-                        deadline: 60,
-                        priority: 1,
-                    }),
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error(
-                    `Heurist image generation failed: ${response.statusText}`
-                );
-            }
-
-            const imageURL = await response.json();
-            return { success: true, data: [imageURL] };
-        } else if (
-            runtime.character.modelProvider === ModelProviderName.LLAMACLOUD
+        let targetSize = `${width}x${height}`;
+        if (
+            targetSize !== "1024x1024" &&
+            targetSize !== "1792x1024" &&
+            targetSize !== "1024x1792"
         ) {
-            const together = new Together({ apiKey: apiKey as string });
-            const response = await together.images.create({
-                model: "black-forest-labs/FLUX.1-schnell",
-                prompt,
-                width,
-                height,
-                steps: modelSettings?.steps ?? 4,
-                n: count,
-            });
-            const urls: string[] = [];
-            for (let i = 0; i < response.data.length; i++) {
-                const json = response.data[i].b64_json;
-                // decode base64
-                const base64 = Buffer.from(json, "base64").toString("base64");
-                urls.push(base64);
-            }
-            const base64s = await Promise.all(
-                urls.map(async (url) => {
-                    const response = await fetch(url);
-                    const blob = await response.blob();
-                    const buffer = await blob.arrayBuffer();
-                    let base64 = Buffer.from(buffer).toString("base64");
-                    base64 = "data:image/jpeg;base64," + base64;
-                    return base64;
-                })
-            );
-            return { success: true, data: base64s };
-        } else {
-            let targetSize = `${width}x${height}`;
-            if (
-                targetSize !== "1024x1024" &&
-                targetSize !== "1792x1024" &&
-                targetSize !== "1024x1792"
-            ) {
-                targetSize = "1024x1024";
-            }
-            const openai = new OpenAI({ apiKey: apiKey as string });
-            const response = await openai.images.generate({
-                model,
-                prompt,
-                size: targetSize as "1024x1024" | "1792x1024" | "1024x1792",
-                n: count,
-                response_format: "b64_json",
-            });
-            const base64s = response.data.map(
-                (image) => `data:image/png;base64,${image.b64_json}`
-            );
-            return { success: true, data: base64s };
+            targetSize = "1024x1024";
         }
+        const openai = new OpenAI({ apiKey: apiKey as string });
+        const response = await openai.images.generate({
+            model: "dall-e-3",
+            prompt,
+            size: targetSize as "1024x1024" | "1792x1024" | "1024x1792",
+            n: count,
+            response_format: "b64_json",
+        });
+        const base64s = response.data.map(
+            (image) => `data:image/png;base64,${image.b64_json}`
+        );
+        return { success: true, data: base64s };
     } catch (error) {
         console.error(error);
         return { success: false, error: error };

@@ -17,67 +17,74 @@ import { buildConversationThread, sendTweet, wait } from "./utils.ts";
 import { embeddingZeroVector } from "@ai16z/eliza";
 
 export const twitterMessageHandlerTemplate =
-    `{{timeline}}
-
-# Knowledge
+    `# Context
+{{timeline}}
 {{knowledge}}
 
-# Task: Generate a post for the character {{agentName}}.
 About {{agentName}} (@{{twitterUserName}}):
 {{bio}}
 {{lore}}
 {{topics}}
 
-{{providers}}
-
-{{characterPostExamples}}
-
-{{postDirections}}
-
-Recent interactions between {{agentName}} and other users:
+Recent Activity:
+{{recentPosts}}
 {{recentPostInteractions}}
 
-{{recentPosts}}
-
-
-# Task: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
-Current Post:
+Current Conversation:
 {{currentPost}}
-Thread of Tweets You Are Replying To:
-
 {{formattedConversation}}
 
-{{actions}}
+# Task: Generate a concise, valuable response (max 20 words) that:
+- Adds to the conversation
+- Matches your voice and perspective
+- Uses statements, not questions
+- Includes double line breaks between statements
+- Avoids emojis
 
-# Task: Generate a post in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}). Include an action, if appropriate. {{actionNames}}:
-{{currentPost}}
+{{actions}}
 ` + messageCompletionFooter;
 
 export const twitterShouldRespondTemplate =
-    `# INSTRUCTIONS: Determine if {{agentName}} (@{{twitterUserName}}) should respond to the message and participate in the conversation. Do not comment. Just respond with "true" or "false".
+    `# Context
+{{timeline}}
 
-Response options are RESPOND, IGNORE and STOP .
+About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
+{{topics}}
 
-{{agentName}} should respond to messages that are directed at them, or participate in conversations that are interesting or relevant to their background, IGNORE messages that are irrelevant to them, and should STOP if the conversation is concluded.
-
-{{agentName}} is in a room with other users and wants to be conversational, but not annoying.
-{{agentName}} should RESPOND to messages that are directed at them, or participate in conversations that are interesting or relevant to their background.
-If a message is not interesting or relevant, {{agentName}} should IGNORE.
-Unless directly RESPONDing to a user, {{agentName}} should IGNORE messages that are very short or do not contain much information.
-If a user asks {{agentName}} to stop talking, {{agentName}} should STOP.
-If {{agentName}} concludes a conversation and isn't part of the conversation anymore, {{agentName}} should STOP.
-
+Recent Activity:
 {{recentPosts}}
+{{recentPostInteractions}}
 
-IMPORTANT: {{agentName}} (aka @{{twitterUserName}}) is particularly sensitive about being annoying, so if there is any doubt, it is better to IGNORE than to RESPOND.
-
+Current Conversation:
 {{currentPost}}
-
-Thread of Tweets You Are Replying To:
-
 {{formattedConversation}}
 
-# INSTRUCTIONS: Respond with [RESPOND] if {{agentName}} should respond, or [IGNORE] if {{agentName}} should not respond to the last message and [STOP] if {{agentName}} should stop participating in the conversation.
+# Critical Rules
+- ALWAYS respond to any reply in your own threads
+- NEVER ignore replies to your tweets
+- Only stop responding if explicitly asked to stop
+- IGNORE threads with multiple bot participants
+- STOP if detected in a bot-to-bot conversation
+- IGNORE if multiple usernames contain 'bot' or 'ai'
+
+# Response Guidelines
+- Respond to direct mentions from human users
+- ALWAYS respond to replies to your own tweets from humans
+- Engage with relevant topics from your background/interests
+- Continue meaningful conversations with humans
+- Step back if the conversation naturally concludes
+- IGNORE if your input wouldn't add value
+- STOP if asked to stop or conversation is done
+- IGNORE conversations between multiple bots
+
+# Thread Context Rules
+- If this is a reply to your tweet, RESPOND
+- If you are mentioned in a thread you started, RESPOND
+- If the conversation is under your tweet, RESPOND unless asked to stop
+
+# Instructions: Choose [RESPOND], [IGNORE], or [STOP] based on conversation context and value of potential response.
 ` + shouldRespondFooter;
 
 export class TwitterInteractionClient extends ClientBase {
@@ -101,10 +108,10 @@ export class TwitterInteractionClient extends ClientBase {
     async handleTwitterInteractions() {
         elizaLogger.log("Checking Twitter interactions");
         try {
-            // Check for mentions
+            // Check for mentions and replies to bot's tweets
             const tweetCandidates = (
                 await this.fetchSearchTweets(
-                    `@${this.runtime.getSetting("TWITTER_USERNAME")}`,
+                    `@${this.runtime.getSetting("TWITTER_USERNAME")} OR to:${this.runtime.getSetting("TWITTER_USERNAME")}`,
                     20,
                     SearchMode.Latest
                 )
@@ -113,13 +120,27 @@ export class TwitterInteractionClient extends ClientBase {
             // de-duplicate tweetCandidates with a set
             const uniqueTweetCandidates = [...new Set(tweetCandidates)];
 
-            // Sort tweet candidates by ID in ascending order
-            uniqueTweetCandidates
+            // Sort tweet candidates by ID in ascending order and only filter out bot's own tweets
+            const filteredTweets = uniqueTweetCandidates
                 .sort((a, b) => a.id.localeCompare(b.id))
-                .filter((tweet) => tweet.userId !== this.twitterUserId);
+                .filter(tweet => {
+                    // Get the thread owner (first tweet in conversation)
+                    const threadOwner = tweet.thread[0]?.username;
+                    const isOwnThread = threadOwner === this.runtime.getSetting("TWITTER_USERNAME");
+
+                    // Keep the tweet if:
+                    // 1. It's in the bot's own thread OR
+                    // 2. It's a direct mention/reply to the bot
+                    return isOwnThread ||
+                        tweet.text.includes(`@${this.runtime.getSetting("TWITTER_USERNAME")}`) ||
+                        (tweet.inReplyToStatusId && tweet.thread.some(t =>
+                            t.username === this.runtime.getSetting("TWITTER_USERNAME") &&
+                            t.id === tweet.inReplyToStatusId
+                        ));
+                });
 
             // for each tweet candidate, handle the tweet
-            for (const tweet of uniqueTweetCandidates) {
+            for (const tweet of filteredTweets) {
                 // console.log("tweet:", tweet);
                 if (
                     !this.lastCheckedTweetId ||
@@ -206,14 +227,27 @@ export class TwitterInteractionClient extends ClientBase {
         message: Memory;
         thread: Tweet[];
     }) {
-        if (tweet.username === this.runtime.getSetting("TWITTER_USERNAME")) {
-            // console.log("skipping tweet from bot itself", tweet.id);
-            // Skip processing if the tweet is from the bot itself
+        // Check if this is a reply to bot's tweet or in bot's thread
+        const isInBotThread = thread.some(t =>
+            t.username === this.runtime.getSetting("TWITTER_USERNAME") &&
+            (t.id === tweet.inReplyToStatusId || t.id === tweet.conversationId)
+        );
+
+        // Only skip if it's the bot's standalone tweet with no context
+        if (tweet.username === this.runtime.getSetting("TWITTER_USERNAME") &&
+            !tweet.inReplyToStatusId &&
+            thread.length === 1) {
+            elizaLogger.log("Skipping bot's standalone tweet");
             return;
         }
 
+        // Force respond if it's in bot's thread
+        if (isInBotThread) {
+            elizaLogger.log("Tweet is in bot's thread - should respond");
+        }
+
         if (!message.content.text) {
-            elizaLogger.log("skipping tweet with no text", tweet.id);
+            elizaLogger.log("Warning: Tweet has no text content:", tweet.id);
             return { text: "", action: "IGNORE" };
         }
         elizaLogger.log("handling tweet", tweet.id);
@@ -289,10 +323,10 @@ export class TwitterInteractionClient extends ClientBase {
                     url: tweet.permanentUrl,
                     inReplyTo: tweet.inReplyToStatusId
                         ? stringToUuid(
-                              tweet.inReplyToStatusId +
-                                  "-" +
-                                  this.runtime.agentId
-                          )
+                            tweet.inReplyToStatusId +
+                            "-" +
+                            this.runtime.agentId
+                        )
                         : undefined,
                 },
                 userId: userIdUUID,
@@ -311,16 +345,21 @@ export class TwitterInteractionClient extends ClientBase {
                 twitterShouldRespondTemplate,
         });
 
-        const shouldRespond = await generateShouldRespond({
-            runtime: this.runtime,
-            context: shouldRespondContext,
-            modelClass: ModelClass.MEDIUM,
-        });
+        if (isInBotThread && !message.content.text.toLowerCase().includes('stop')) {
+            // Skip the shouldRespond check entirely for bot's own threads
+            // unless user explicitly asks to stop
+            elizaLogger.log("Tweet is in bot's thread - forcing response");
+        } else {
+            const shouldRespond = await generateShouldRespond({
+                runtime: this.runtime,
+                context: shouldRespondContext,
+                modelClass: ModelClass.MEDIUM,
+            });
 
-        // Promise<"RESPOND" | "IGNORE" | "STOP" | null> {
-        if (shouldRespond !== "RESPOND") {
-            elizaLogger.log("Not responding to message");
-            return { text: "Response Decision:", action: shouldRespond };
+            if (shouldRespond !== "RESPOND") {
+                elizaLogger.log("Not responding to message");
+                return { text: "Response Decision:", action: shouldRespond };
+            }
         }
 
         const context = composeContext({
@@ -454,10 +493,10 @@ export class TwitterInteractionClient extends ClientBase {
                         url: currentTweet.permanentUrl,
                         inReplyTo: currentTweet.inReplyToStatusId
                             ? stringToUuid(
-                                  currentTweet.inReplyToStatusId +
-                                      "-" +
-                                      this.runtime.agentId
-                              )
+                                currentTweet.inReplyToStatusId +
+                                "-" +
+                                this.runtime.agentId
+                            )
                             : undefined,
                     },
                     createdAt: currentTweet.timestamp * 1000,
