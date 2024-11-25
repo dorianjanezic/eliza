@@ -1,6 +1,6 @@
-import { SearchMode } from "agent-twitter-client";
+import { SearchMode } from "goat-x";
 import fs from "fs";
-import { composeContext } from "@ai16z/eliza";
+import { composeContext, elizaLogger } from "@ai16z/eliza";
 import { generateMessageResponse, generateText } from "@ai16z/eliza";
 import { messageCompletionFooter } from "@ai16z/eliza";
 import {
@@ -16,43 +16,54 @@ import { stringToUuid } from "@ai16z/eliza";
 import { ClientBase } from "./base.ts";
 import { buildConversationThread, sendTweet, wait } from "./utils.ts";
 
-const twitterSearchTemplate =
-    `{{timeline}}
+const twitterSearchTemplate = `
+# Tweet Context
+Selected Tweet:
+@{{selectedUsername}}: {{selectedTweet}}
+Images in tweet: {{imageDescriptions}}
+{{replyContext}}
 
-{{providers}}
-
-About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{topics}}
-
-{{postDirections}}
-
-Recent interactions between {{agentName}} and other users:
-{{recentPostInteractions}}
-
+# Your Recent Activity
 {{recentPosts}}
 
-# Task: Analyze and respond to this tweet from an account you follow. Write a {{adjective}} response that adds value to the conversation while staying true to {{agentName}}'s perspective.
-{{currentPost}}
+# Agent Context
+About @{{twitterUserName}}:
+- Mood: {{adjective}} && {{postExamples}}
 
-IMPORTANT: Your response CANNOT be longer than 20 words.
-Aim for 1-2 short sentences maximum. Be concise and direct.
+# Response Directives
+1. Focus on responding directly to @{{selectedUsername}}'s tweet
+2. Consider the full context and any previous replies
+3. Keep your response:
+   - Relevant to the tweet's topic
+   - Under 240 characters
+   - Natural and conversational
+   
+Style Notes:
+- don't start with a question
+- Use first person ("i think", "i believe", my, mine) about 50% of the time
+- use lowercase for all tweets
+- Keep it spicy but make it make sense
+- based
+- sometimes use the name of the user you are replying to
+- It's giving main character energy
+- No basic takes allowed
+- Sprinkle some chaos
+- Deadass keep it real
+- Can throw shade but make it clever
+- Absolutely zero corporate speak
+- Meme-worthy but not trying too hard
 
-Guidelines for responding to followed accounts:
-- Add meaningful insights or perspectives
-- Stay relevant to the topic
-- Avoid basic agreements or generic responses
-- Maintain your unique voice while being respectful
-- No questions, only statements
-- No emojis
-- Use \\n\\n (double spaces) between statements
+FORMAT: Output only a single reply tweet. No thread behavior. Make it quotable. No emojis. No explanation of your response.
 
+Additional context:
+{{postDirections}}
+
+// Now craft a response that will make @{{selectedUsername}} want to engage.
 ` + messageCompletionFooter;
 
 export class TwitterSearchClient extends ClientBase {
     private respondedTweets: Set<string> = new Set();
-    private isSearchTurn: boolean = true;  // Toggle between search and followed accounts
+    private isSearchTurn: boolean = false;  // Toggle between search and followed accounts
 
     constructor(runtime: IAgentRuntime) {
         super({
@@ -69,14 +80,14 @@ export class TwitterSearchClient extends ClientBase {
         this.engage();
         setTimeout(
             () => this.startEngagementLoop(),
-            (Math.floor(Math.random() * (4 - 2 + 1)) + 6) * 60 * 1000
+            (Math.floor(Math.random() * (6 - 4 + 1)) + 6) * 60 * 1000
         );
     }
 
     private async engage() {
         if (this.isSearchTurn) {
             console.log("Engaging with search terms");
-            await this.engageWithSearchTerms();
+            await this.engageWithFollowedAccounts();
         } else {
             console.log("Engaging with followed accounts");
             await this.engageWithFollowedAccounts();
@@ -155,12 +166,7 @@ export class TwitterSearchClient extends ClientBase {
                     .join("\n")}
   
   Which tweet is the most interesting and relevant for Komorebi to reply to? Please provide only the ID of the tweet in your response.
-  Notes:
-    - Respond to English tweets only
-    - Respond to tweets that don't have a lot of hashtags, links, URLs or images
-    - Respond to tweets that are not retweets
-    - Respond to tweets where there is an easy exchange of ideas to have with the user
-    - ONLY respond with the ID of the tweet`;
+`;
 
             const mostInterestingTweetResponse = await generateText({
                 runtime: this.runtime,
@@ -280,15 +286,23 @@ export class TwitterSearchClient extends ClientBase {
             let state = await this.runtime.composeState(message, {
                 twitterClient: this.twitterClient,
                 twitterUserName: this.runtime.getSetting("TWITTER_USERNAME"),
+                selectedUsername: selectedTweet.username,
+                selectedTweet: selectedTweet.text,
+                imageDescriptions: imageDescriptions.length > 0 ? imageDescriptions.join("\n") : undefined,
+                replyContext: replyContext.length > 0 ? replyContext : undefined,
+                postExamples: this.runtime.character.postExamples
+                    .sort(() => 0.5 - Math.random())
+                    .slice(0, 5)
+                    .join("\n"),
                 timeline: formattedHomeTimeline,
                 tweetContext: `${tweetBackground}
-  
-  Original Post:
-  By @${selectedTweet.username}
-  ${selectedTweet.text}${replyContext.length > 0 && `\nReplies to original post:\n${replyContext}`}
-  ${`Original post text: ${selectedTweet.text}`}
-  ${selectedTweet.urls.length > 0 ? `URLs: ${selectedTweet.urls.join(", ")}\n` : ""}${imageDescriptions.length > 0 ? `\nImages in Post (Described): ${imageDescriptions.join(", ")}\n` : ""}
-  `,
+    Original Post:
+    By @${selectedTweet.username}
+    ${selectedTweet.text}
+    ${replyContext.length > 0 ? `\nReplies:\n${replyContext}` : ''}
+    ${selectedTweet.urls.length > 0 ? `\nURLs: ${selectedTweet.urls.join(", ")}` : ''}
+    ${imageDescriptions.length > 0 ? `\nImages: ${imageDescriptions.join("\n")}` : ''}
+    `,
             });
 
             await this.saveRequestMessage(message, state as State);
@@ -368,6 +382,37 @@ export class TwitterSearchClient extends ClientBase {
 
     private async engageWithFollowedAccounts() {
         console.log("Engaging with followed accounts");
+        const userId = await this.requestQueue.add(async () => {
+            // wait 3 seconds before getting the user id
+            await new Promise((resolve) => setTimeout(resolve, 10000));
+            try {
+                return await this.twitterClient.getUserIdByScreenName(
+                    this.runtime.getSetting("TWITTER_USERNAME")
+                );
+            } catch (error) {
+                console.error("Error getting user ID:", error);
+                return null;
+            }
+        });
+        if (!userId) {
+            console.error("Failed to get user ID");
+            return;
+        }
+        elizaLogger.log("Twitter user ID:", userId);
+        this.twitterUserId = userId;
+        const following = await this.requestQueue.add(() =>
+            this.twitterClient.fetchProfileFollowing(
+                this.twitterUserId,
+                50,
+                null
+            )
+        );
+        elizaLogger.log(`Following ${following.profiles.length} accounts`);
+        elizaLogger.log(following.profiles.length);
+
+        // Create a Set of followed usernames for faster lookups
+        const followedUsernames = new Set(following.profiles.map(profile => profile.username));
+
         try {
             if (!fs.existsSync("tweetcache")) {
                 fs.mkdirSync("tweetcache");
@@ -390,7 +435,7 @@ export class TwitterSearchClient extends ClientBase {
                     })
                     .join("\n");
 
-            // Filter valid tweets
+            // Filter valid tweets - now including check for followed accounts
             const validTweets = homeTimeline.filter(tweet => {
                 const isReplyToBot = tweet.inReplyToStatusId &&
                     tweet.thread.find(t =>
@@ -399,7 +444,8 @@ export class TwitterSearchClient extends ClientBase {
                     );
                 return !isReplyToBot &&
                     !this.respondedTweets.has(tweet.id) &&
-                    tweet.username !== this.runtime.getSetting("TWITTER_USERNAME");
+                    tweet.username !== this.runtime.getSetting("TWITTER_USERNAME") &&
+                    followedUsernames.has(tweet.username); // Only include tweets from followed accounts
             });
 
             if (validTweets.length === 0) {

@@ -1,4 +1,4 @@
-import { Tweet } from "agent-twitter-client";
+import { Tweet } from "goat-x";
 import fs from "fs";
 import { composeContext, elizaLogger } from "@ai16z/eliza";
 import { generateText } from "@ai16z/eliza";
@@ -7,9 +7,11 @@ import { IAgentRuntime, ModelClass } from "@ai16z/eliza";
 import { stringToUuid } from "@ai16z/eliza";
 import { ClientBase } from "./base.ts";
 
+
+// recentposts are not visible in the context
 const twitterPostTemplate = `
-# Current Timeline Vibe Check
-{{timeline}}
+# Post Examples Vibe Check
+{{postExamples}}
 
 # Your Recent Posts (avoid repeating these vibes):
 {{recentPosts}}
@@ -17,14 +19,15 @@ const twitterPostTemplate = `
 # Agent Context
 About @twitterUserName:
 - Keeping it real, no filter
-- Vibing on: {{topic}} 
-- Current mood: {{adjective}}
+- Vibing on: {{potsExamples theme}}
+- Current mood: {{timeline}}
 
 # Content Generation Directives
-1. Scan the timeline for what's hitting rn
+
+1. Scan the post examples for what's hitting rn
 2. Pick the spiciest take or trend that matches your vibe
-4. Sometimes tag relevant account
-3. Drop your own perspective that's:
+4. sometimes write in japanese
+5. Drop your own perspective that's:
    - Based but not cringe
    - Lowkey funny but real
    - Might make someone go "fr fr"
@@ -33,9 +36,13 @@ About @twitterUserName:
    - Keeps it under 240 chars
    - Can be slightly unhinged
    - Ratio potential = high
+   - talk from first person
 
-Style Notes:
+<TWITTER AS YOUR Personal Journal> Style Notes:
+- keep text lowercase
+- Use first person as if writing a journal ("i think", "i believe", my, mine) about 50% of the time
 - Keep it spicy but make it make sense
+- based
 - It's giving main character energy
 - No basic takes allowed
 - Sprinkle some chaos
@@ -43,15 +50,14 @@ Style Notes:
 - Can throw shade but make it clever
 - Absolutely zero corporate speak
 - Meme-worthy but not trying too hard
+- Avoid overusing "just" - vary sentence structure
+- Use strong verbs instead of "is/are + just"
 
 FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. Make it quotable. No emojis. No description why you choose that vibe.
 
-Additional flavor:
-{{postDirections}}
+// Now drop something that's gonna make people stop scrolling.`;
 
-// Now cook something up that's gonna make people stop scrolling.`;
-
-const MAX_TWEET_LENGTH = 240;
+const MAX_TWEET_LENGTH = 210;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
@@ -86,8 +92,8 @@ function truncateToCompleteSentence(text: string): string {
 export class TwitterPostClient extends ClientBase {
     onReady(postImmediately: boolean = true) {
         const generateNewTweetLoop = () => {
-            const minMinutes = 5;
-            const maxMinutes = 10;
+            const minMinutes = 12;
+            const maxMinutes = 20;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
                 minMinutes;
@@ -112,6 +118,8 @@ export class TwitterPostClient extends ClientBase {
             runtime,
         });
     }
+
+
 
     private async generateNewTweet() {
         elizaLogger.log("Generating new tweet");
@@ -159,7 +167,10 @@ export class TwitterPostClient extends ClientBase {
                     postDirections: (() => {
                         const all = this.runtime.character?.style?.all || [];
                         const post = this.runtime.character?.style?.post || [];
-                        return [...all, ...post].join("\n");
+                        // Randomly select 3 from all styles and 3 from post styles
+                        const randomAll = all.sort(() => 0.5 - Math.random()).slice(0, 3);
+                        const randomPost = post.sort(() => 0.5 - Math.random()).slice(0, 3);
+                        return [...randomAll, ...randomPost].join("\n");
                     })(),
                     postExamples: this.runtime.character.postExamples
                         .sort(() => 0.5 - Math.random())

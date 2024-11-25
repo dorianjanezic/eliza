@@ -857,60 +857,10 @@ export class MessageManager {
         state: State
     ): Promise<boolean> {
         if (message.author.id === this.client.user?.id) return false;
-        // if (message.author.bot) return false;
+        // Only respond if the bot is mentioned
         if (message.mentions.has(this.client.user?.id as string)) return true;
-
-        const guild = message.guild;
-        const member = guild?.members.cache.get(this.client.user?.id as string);
-        const nickname = member?.nickname;
-
-        if (
-            message.content
-                .toLowerCase()
-                .includes(this.client.user?.username.toLowerCase() as string) ||
-            message.content
-                .toLowerCase()
-                .includes(this.client.user?.tag.toLowerCase() as string) ||
-            (nickname &&
-                message.content.toLowerCase().includes(nickname.toLowerCase()))
-        ) {
-            return true;
-        }
-
-        if (!message.guild) {
-            return true;
-        }
-
-        // If none of the above conditions are met, use the generateText to decide
-        const shouldRespondContext = composeContext({
-            state,
-            template:
-                this.runtime.character.templates
-                    ?.discordShouldRespondTemplate ||
-                this.runtime.character.templates?.shouldRespondTemplate ||
-                discordShouldRespondTemplate,
-        });
-
-        const response = await generateShouldRespond({
-            runtime: this.runtime,
-            context: shouldRespondContext,
-            modelClass: ModelClass.SMALL,
-        });
-
-        if (response === "RESPOND") {
-            return true;
-        } else if (response === "IGNORE") {
-            return false;
-        } else if (response === "STOP") {
-            delete this.interestChannels[message.channelId];
-            return false;
-        } else {
-            console.error(
-                "Invalid response from response generateText:",
-                response
-            );
-            return false;
-        }
+        // Return false for all other cases
+        return false;
     }
 
     private async _generateResponse(

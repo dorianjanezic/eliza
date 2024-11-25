@@ -1,4 +1,4 @@
-import { SearchMode, Tweet } from "agent-twitter-client";
+import { SearchMode, Tweet } from "goat-x";
 import fs from "fs";
 import { composeContext, elizaLogger } from "@ai16z/eliza";
 import { generateMessageResponse, generateShouldRespond } from "@ai16z/eliza";
@@ -93,7 +93,7 @@ export class TwitterInteractionClient extends ClientBase {
             this.handleTwitterInteractions();
             setTimeout(
                 handleTwitterInteractionsLoop,
-                (Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 60 * 1000
+                (Math.floor(Math.random() * (40 - 30 + 1)) + 2) * 60 * 1000
             ); // Random interval between 2-5 minutes
         };
         handleTwitterInteractionsLoop();

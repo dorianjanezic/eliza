@@ -1,6 +1,6 @@
 // utils.ts
 
-import { Tweet } from "agent-twitter-client";
+import { Tweet } from "goat-x";
 import { embeddingZeroVector } from "@ai16z/eliza";
 import { Content, Memory, UUID } from "@ai16z/eliza";
 import { stringToUuid } from "@ai16z/eliza";
@@ -85,10 +85,10 @@ export async function buildConversationThread(
                     url: currentTweet.permanentUrl,
                     inReplyTo: currentTweet.inReplyToStatusId
                         ? stringToUuid(
-                              currentTweet.inReplyToStatusId +
-                                  "-" +
-                                  client.runtime.agentId
-                          )
+                            currentTweet.inReplyToStatusId +
+                            "-" +
+                            client.runtime.agentId
+                        )
                         : undefined,
                 },
                 createdAt: currentTweet.timestamp * 1000,
@@ -222,8 +222,8 @@ export async function sendTweet(
             url: tweet.permanentUrl,
             inReplyTo: tweet.inReplyToStatusId
                 ? stringToUuid(
-                      tweet.inReplyToStatusId + "-" + client.runtime.agentId
-                  )
+                    tweet.inReplyToStatusId + "-" + client.runtime.agentId
+                )
                 : undefined,
         },
         roomId,

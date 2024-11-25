@@ -14,13 +14,11 @@ import {
     Scraper,
     SearchMode,
     Tweet,
-
-} from "agent-twitter-client";
+} from "goat-x";
 import { EventEmitter } from "events";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-
 import { glob } from "glob";
 
 export function extractAnswer(text: string): string {
@@ -90,7 +88,7 @@ export class ClientBase extends EventEmitter {
     lastCheckedTweetId: number | null = null;
     tweetCacheFilePath = __dirname + "/tweetcache/latest_checked_tweet_id.txt";
     imageDescriptionService: IImageDescriptionService;
-    temperature: number = 0.5;
+    temperature: number = 0.8;
 
     private tweetCache: Map<string, Tweet> = new Map();
     requestQueue: RequestQueue = new RequestQueue();
@@ -343,7 +341,7 @@ export class ClientBase extends EventEmitter {
                         [],
                 };
 
-                console.log("obj is", obj);
+                // console.log("obj is", obj);
 
                 return obj;
             });
@@ -661,4 +659,80 @@ export class ClientBase extends EventEmitter {
             };
         }
     }
+
+    async fetchTweetsFromFollowedAccounts(count: number): Promise<Tweet[]> {
+
+        try {
+            // Get list of followed accounts
+            const following = await this.requestQueue.add(() =>
+                this.twitterClient.fetchProfileFollowing(
+                    this.runtime.getSetting("TWITTER_USERNAME"),
+                    50,
+                    null
+                )
+            );
+
+            elizaLogger.log(`Fetching tweets from ${following.profiles.length} followed accounts`);
+
+            // Collect tweets from each followed account
+            const allTweets: Tweet[] = [];
+            const tweetsPerAccount = Math.ceil(count / following.profiles.length);
+
+            for (const followedUser of following.profiles) {
+                try {
+                    const userTweets = await this.requestQueue.add(async () => {
+                        const tweets = [];
+                        for await (const tweet of this.twitterClient.getTweets(followedUser.username, tweetsPerAccount)) {
+                            tweets.push(tweet);
+                        }
+                        return tweets;
+                    });
+
+                    // Process each tweet
+                    for await (const tweet of userTweets) {
+                        const processedTweet: Tweet = {
+                            id: tweet.id,
+                            name: tweet.name ?? tweet.user?.name,
+                            username: tweet.username ?? tweet.user?.username,
+                            text: tweet.text ?? tweet.full_text,
+                            inReplyToStatusId: tweet.inReplyToStatusId,
+                            timestamp: new Date(tweet.createdAt).getTime() / 1000,
+                            userId: tweet.userId ?? tweet.user?.id,
+                            conversationId: tweet.conversationId,
+                            hashtags: tweet.hashtags ?? [],
+                            mentions: tweet.mentions ?? [],
+                            photos: tweet.photos ?? [],
+                            thread: [],
+                            urls: tweet.urls ?? [],
+                            videos: tweet.videos ?? [],
+                        };
+
+                        allTweets.push(processedTweet);
+                    }
+
+                    // Add a small delay between requests to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                } catch (error) {
+                    elizaLogger.error(`Error fetching tweets for ${followedUser.username}:`, error);
+                    continue;
+                }
+            }
+
+            // Sort tweets by creation date (newest first) and limit to requested count
+            const sortedTweets = allTweets
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, count);
+
+            elizaLogger.log(`Retrieved ${sortedTweets.length} tweets from followed accounts`);
+            return sortedTweets;
+
+        } catch (error) {
+            elizaLogger.error('Error fetching tweets from followed accounts:', error);
+            return [];
+        }
+    }
 }
+
+
+
