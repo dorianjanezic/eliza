@@ -122,7 +122,6 @@ const videoGeneration: Action = {
     validate: async (runtime: IAgentRuntime, message: Memory) => {
         elizaLogger.log("Validating video generation action");
         const lumaApiKey = runtime.getSetting("LUMA_API_KEY");
-        elizaLogger.log("LUMA_API_KEY present:", !!lumaApiKey);
         return !!lumaApiKey;
     },
     handler: async (

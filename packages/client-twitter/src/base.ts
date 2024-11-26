@@ -304,7 +304,7 @@ export class ClientBase extends EventEmitter {
         return homeTimeline
             .filter((t) => t.__typename !== "TweetWithVisibilityResults")
             .map((tweet) => {
-                console.log("tweet is", tweet);
+                // console.log("tweet is", tweet);
                 const obj = {
                     id: tweet.rest_id,
                     name:

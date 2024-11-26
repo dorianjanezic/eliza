@@ -689,3 +689,30 @@ export enum LoggingLevel {
     VERBOSE = "verbose",
     NONE = "none",
 }
+
+/**
+ * Represents the actions that can be taken on a tweet
+ */
+export interface TweetAction {
+    like: boolean;
+    retweet: boolean;
+    quote?: boolean;
+    reply?: boolean;
+}
+
+/**
+ * Represents a response to a tweet, containing the actions to be taken
+ */
+export interface TweetResponse {
+    actions: TweetAction;
+}
+
+/**
+ * Represents a general action response for social media interactions
+ */
+export interface ActionResponse {
+    like: boolean;
+    retweet: boolean;
+    quote?: boolean;
+    reply?: boolean;
+}

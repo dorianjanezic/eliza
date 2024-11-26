@@ -1,9 +1,46 @@
+import { ActionResponse } from "./types.ts";
+
 const jsonBlockPattern = /```json\n([\s\S]*?)\n```/;
 
 export const messageCompletionFooter = `\nResponse format should be formatted in a JSON block like this:
 \`\`\`json
 { "user": "{{agentName}}", "text": string, "action": "string" }
 \`\`\``;
+
+export const postActionResponseFooter = `Choose any combination of [LIKE], [RETWEET], [QUOTE], and [REPLY] that are appropriate. Each action must be on its own line. Your response must only include the chosen actions.`;
+
+export const parseActionResponseFromText = (text: string): { actions: ActionResponse } => {
+    const actions: ActionResponse = {
+        like: false,
+        retweet: false,
+        quote: false,
+        reply: false
+    };
+
+    // Regex patterns
+    const likePattern = /\[LIKE\]/i;
+    const retweetPattern = /\[RETWEET\]/i;
+    const quotePattern = /\[QUOTE\]/i;
+    const replyPattern = /\[REPLY\]/i;
+
+    // Check with regex
+    actions.like = likePattern.test(text);
+    actions.retweet = retweetPattern.test(text);
+    actions.quote = quotePattern.test(text);
+    actions.reply = replyPattern.test(text);
+
+    // Also do line by line parsing as backup
+    const lines = text.split('\n');
+    for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed === '[LIKE]') actions.like = true;
+        if (trimmed === '[RETWEET]') actions.retweet = true;
+        if (trimmed === '[QUOTE]') actions.quote = true;
+        if (trimmed === '[REPLY]') actions.reply = true;
+    }
+
+    return { actions };
+};
 
 export const shouldRespondFooter = `The available options are [RESPOND], [IGNORE], or [STOP]. Choose the most appropriate option.
 If {{agentName}} is talking too much, you can choose [IGNORE]
@@ -23,12 +60,12 @@ export const parseShouldRespondFromText = (
     return match
         ? (match[0].toUpperCase() as "RESPOND" | "IGNORE" | "STOP")
         : text.includes("RESPOND")
-          ? "RESPOND"
-          : text.includes("IGNORE")
-            ? "IGNORE"
-            : text.includes("STOP")
-              ? "STOP"
-              : null;
+            ? "RESPOND"
+            : text.includes("IGNORE")
+                ? "IGNORE"
+                : text.includes("STOP")
+                    ? "STOP"
+                    : null;
 };
 
 export const booleanFooter = `Respond with a YES or a NO.`;
