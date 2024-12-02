@@ -725,56 +725,114 @@ export async function generateMessageResponse({
     }
 }
 
+interface TogetherImageResponse {
+    id: string;
+    model: string;
+    object: string;
+    data: Array<{
+        timings: any;
+        index: number;
+        url: string;
+    }>;
+}
+
 export const generateImage = async (
     data: {
         prompt: string;
-        width: number;
-        height: number;
-        count?: number;
-        negativePrompt?: string;
-        numIterations?: number;
-        guidanceScale?: number;
-        seed?: number;
-        modelId?: string;
-        jobId?: string;
+        width?: number,  // Make width optional with default
+        height?: number, // Make height optional with default
+        count?: number,
+        negativePrompt?: string,
+        numIterations?: number,
+        guidanceScale?: number,
+        seed?: number,
+        modelId?: string,
+        jobId?: string,
     },
     runtime: IAgentRuntime
 ): Promise<{
     success: boolean;
     data?: string[];
     error?: any;
+    details?: Record<string, any>;
 }> => {
-    const { prompt, width, height } = data;
+    const { prompt, width = 1024, height = 1024 } = data;
     let { count } = data;
     if (!count) {
         count = 1;
     }
 
-    const apiKey = runtime.getSetting("OPENAI_API_KEY");
     try {
-        let targetSize = `${width}x${height}`;
-        if (
-            targetSize !== "1024x1024" &&
-            targetSize !== "1792x1024" &&
-            targetSize !== "1024x1792"
-        ) {
-            targetSize = "1024x1024";
+        const togetherApiKey = runtime.getSetting("TOGETHER_API_KEY");
+        if (!togetherApiKey) {
+            return { success: false, error: "No Together API key available" };
         }
-        const openai = new OpenAI({ apiKey: apiKey as string });
-        const response = await openai.images.generate({
-            model: "dall-e-3",
-            prompt,
-            size: targetSize as "1024x1024" | "1792x1024" | "1024x1792",
-            n: count,
-            response_format: "b64_json",
+
+        const together = new Together({
+            apiKey: togetherApiKey,
+            baseURL: "https://api.together.xyz/v1"
         });
-        const base64s = response.data.map(
-            (image) => `data:image/png;base64,${image.b64_json}`
+        console.log("Attempting Together API call with params:", {
+            model: "black-forest-labs/FLUX.1-pro",
+            prompt: prompt.replace(/<@\d+>/g, '').trim(),
+            steps: 20,
+            n: count,
+            width,
+            height,
+            seed: data.seed || Math.floor(Math.random() * 1000000)
+        });
+        const response = await together.images.create({
+            model: "black-forest-labs/FLUX.1-pro",
+            prompt: prompt.replace(/<@\d+>/g, '').trim(),
+            steps: 20,
+            n: count,
+            width,
+            height,
+            seed: data.seed || Math.floor(Math.random() * 1000000)
+        }) as unknown as TogetherImageResponse;
+
+        console.log("API response:", response);
+
+        if (!response.data?.length) {
+            return { success: false, error: "No images generated from API response" };
+        }
+
+        // Download images and convert to base64
+        const base64Images = await Promise.all(
+            response.data.map(async ({ url }) => {
+                const imageResponse = await fetch(url);
+                if (!imageResponse.ok) {
+                    throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
+                }
+                const arrayBuffer = await imageResponse.arrayBuffer();
+                return Buffer.from(arrayBuffer).toString('base64');
+            })
         );
-        return { success: true, data: base64s };
+
+        return { success: true, data: base64Images };
     } catch (error) {
-        console.error(error);
-        return { success: false, error: error };
+        console.error("Image generation error:", {
+            error,
+            errorName: error.name,
+            errorMessage: error.message,
+            errorStack: error.stack,
+            prompt,
+            width,
+            height,
+            count
+        });
+        return {
+            success: false,
+            error: error.message || "Unknown error occurred during image generation",
+            details: {
+                errorName: error.name,
+                prompt,
+                width,
+                height,
+                count,
+                stack: error.stack
+            }
+        };
     }
 };
 

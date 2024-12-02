@@ -40,7 +40,6 @@ About @{{twitterUserName}}:
    
 Style Notes:
 - don't start with a question
-- Use first person ("i think", "i believe", my, mine) about 50% of the time
 - use lowercase for all tweets
 - Keep it spicy but make it make sense
 - based
@@ -87,7 +86,7 @@ export class TwitterSearchClient extends ClientBase {
     private async engage() {
         if (this.isSearchTurn) {
             console.log("Engaging with search terms");
-            await this.engageWithFollowedAccounts();
+            await this.engageWithSearchTerms();
         } else {
             console.log("Engaging with followed accounts");
             await this.engageWithFollowedAccounts();

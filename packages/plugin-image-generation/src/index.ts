@@ -76,14 +76,18 @@ const imageGeneration: Action = {
     ],
     description: "Generate an image to go along with the message.",
     validate: async (runtime: IAgentRuntime, message: Memory) => {
-        const anthropicApiKeyOk = !!runtime.getSetting("ANTHROPIC_API_KEY");
-        const togetherApiKeyOk = !!runtime.getSetting("TOGETHER_API_KEY");
-        const heuristApiKeyOk = !!runtime.getSetting("HEURIST_API_KEY");
-        const openaiApiKeyOk = !!runtime.getSetting("OPENAI_API_KEY");
+        elizaLogger.log("Checking runtime configuration...");
+        const modelProvider = runtime.modelProvider;
+        elizaLogger.log("Current model provider:", modelProvider);
 
-        // TODO: Add openai DALL-E generation as well
+        const togetherApiKey = runtime.getSetting("TOGETHER_API_KEY");
+        elizaLogger.log("Together API key present:", !!togetherApiKey);
 
-        return anthropicApiKeyOk || togetherApiKeyOk || heuristApiKeyOk || openaiApiKeyOk
+        if (!togetherApiKey) {
+            elizaLogger.error("Together API key not found - required for image generation");
+        }
+
+        return !!togetherApiKey;
     },
     handler: async (
         runtime: IAgentRuntime,
@@ -92,100 +96,74 @@ const imageGeneration: Action = {
         options: any,
         callback: HandlerCallback
     ) => {
-        elizaLogger.log("Composing state for message:", message);
-        state = (await runtime.composeState(message)) as State;
-        const userId = runtime.agentId;
-        elizaLogger.log("User ID:", userId);
-
-        const imagePrompt = message.content.text;
-        elizaLogger.log("Image prompt received:", imagePrompt);
-
-        // TODO: Generate a prompt for the image
-
-        const res: { image: string; caption: string }[] = [];
-
-        elizaLogger.log("Generating image with prompt:", imagePrompt);
-        const images = await generateImage(
-            {
-                prompt: imagePrompt,
-                width: 1024,
-                height: 1024,
-                count: 1,
-            },
-            runtime
-        );
-
-        if (images.success && images.data && images.data.length > 0) {
-            elizaLogger.log(
-                "Image generation successful, number of images:",
-                images.data.length
-            );
-            for (let i = 0; i < images.data.length; i++) {
-                const image = images.data[i];
-
-                // Save the image and get filepath
-                const filename = `generated_${Date.now()}_${i}`;
-
-                // Choose save function based on image data format
-                const filepath = image.startsWith("http")
-                    ? await saveHeuristImage(image, filename)
-                    : saveBase64Image(image, filename);
-
-                elizaLogger.log(`Processing image ${i + 1}:`, filename);
-
-                //just dont even add a caption or a description just have it generate & send
-                /*
-                try {
-                    const imageService = runtime.getService(ServiceType.IMAGE_DESCRIPTION);
-                    if (imageService && typeof imageService.describeImage === 'function') {
-                        const caption = await imageService.describeImage({ imageUrl: filepath });
-                        captionText = caption.description;
-                        captionTitle = caption.title;
+        try {
+            // Extract prompt from message with proper null checking
+            if (!message?.content?.text) {
+                return {
+                    success: false,
+                    content: {
+                        text: "No prompt provided for image generation"
                     }
-                } catch (error) {
-                    elizaLogger.error("Caption generation failed, using default caption:", error);
-                }*/
-
-                const caption = "...";
-                /*= await generateCaption(
-                    {
-                        imageUrl: image,
-                    },
-                    runtime
-                );*/
-
-                res.push({ image: filepath, caption: "..." }); //caption.title });
-
-                elizaLogger.log(
-                    `Generated caption for image ${i + 1}:`,
-                    "..." //caption.title
-                );
-                //res.push({ image: image, caption: caption.title });
-
-                callback(
-                    {
-                        text: "...", //caption.description,
-                        attachments: [
-                            {
-                                id: crypto.randomUUID(),
-                                url: filepath,
-                                title: "Generated image",
-                                source: "imageGeneration",
-                                description: "...", //caption.title,
-                                text: "...", //caption.description,
-                            },
-                        ],
-                    },
-                    [
-                        {
-                            attachment: filepath,
-                            name: `${filename}.png`,
-                        },
-                    ]
-                );
+                };
             }
-        } else {
-            elizaLogger.error("Image generation failed or returned no data.");
+
+            // Clean up the prompt by removing mentions and extra whitespace
+            const cleanPrompt = message.content.text
+                .replace(/<@[0-9]+>/g, '')  // Remove Discord mentions
+                .trim();
+
+            if (!cleanPrompt) {
+                return {
+                    success: false,
+                    content: {
+                        text: "Please provide a description of what you'd like me to generate"
+                    }
+                };
+            }
+
+            // Generate the image
+            const imageResult = await generateImage(
+                {
+                    prompt: cleanPrompt,
+                    width: 1024,
+                    height: 1024,
+                    count: 1,
+                },
+                runtime
+            );
+
+            if (!imageResult.success || !imageResult.data || !imageResult.data.length) {
+                throw new Error(imageResult.error || "Failed to generate image");
+            }
+
+            // Process the generated image
+            const base64Image = imageResult.data[0];
+            if (!base64Image) {
+                throw new Error("No image data received");
+            }
+
+            // Convert base64 to buffer
+            const imageBuffer = Buffer.from(base64Image, 'base64');
+
+            return {
+                success: true,
+                content: {
+                    text: "Here's your generated image:",
+                    attachments: [{
+                        type: "image",
+                        data: imageBuffer,
+                        filename: "generated_image.png"
+                    }]
+                }
+            };
+        } catch (error) {
+            console.error("Error in image generation handler:", error);
+            return {
+                success: false,
+                content: {
+                    text: `Sorry, I couldn't generate that image. Error: ${error.message}`
+                }
+            };
         }
     },
     examples: [

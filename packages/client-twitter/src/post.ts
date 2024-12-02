@@ -1,4 +1,4 @@
-import { Scraper, Tweet } from "goat-x";
+import { Tweet } from "goat-x";
 import fs from "fs";
 import { composeContext, elizaLogger } from "@ai16z/eliza";
 import { generateText } from "@ai16z/eliza";
@@ -8,6 +8,7 @@ import { stringToUuid } from "@ai16z/eliza";
 import { ClientBase } from "./base.ts";
 import { postActionResponseFooter } from "@ai16z/eliza";
 import { generateTweetActions } from "@ai16z/eliza";
+import { generateImage } from "@ai16z/eliza";
 
 const twitterPostTemplate = `
 # Post Examples Vibe Check
@@ -17,20 +18,20 @@ const twitterPostTemplate = `
 {{recentMemories}}
 
 # Agent Context
-About @twitterUserName:
+About {{agentName}}:
+{{bio}}
+{{lore}}
 - Keeping it real, no filter
-- Vibing on:one of the themes in the following post examples:
+- Vibing on: one of the themes in the following post examples:
 {{postExamples}} 
 
-- Current mood: {{timeline}}
+- Current mood: {{timeline}} && {{topic}}
 
 # Content Generation Directives
 
-1. Scan the post examples and find the glitchey vibe that's trending
-2. sometimes write in japanese
-3. Drop your own perspective that's:
+1. Scan the post examples and find an inspiration
+2. Drop your own perspective that's:
    - Based but not cringe
-   - Lowkey funny but real
    - Hits different but stays authentic
    - Uses current slang naturally (no forced vibes)
    - Keeps it under 240 chars
@@ -40,7 +41,6 @@ About @twitterUserName:
 
 <TWITTER AS YOUR Personal Journal> Style Notes:
 - keep text lowercase
-- Use first person as if writing a journal ("i think", "i believe", my, mine) about 50% of the time
 - Keep it spicy but make it make sense
 - based
 - It's giving main character energy
@@ -53,7 +53,9 @@ About @twitterUserName:
 - Avoid overusing "just" - vary sentence structure
 - Use strong verbs instead of "is/are + just"
 
-FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. Make it quotable. No emojis. No description why you choose that vibe.
+If it is a reply or quote to a tweet use {{currentTweet}} as a base and don't use phrase lowkey.
+
+FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe.
 
 // Now drop something that's gonna make people stop scrolling.`;
 
@@ -77,7 +79,7 @@ Available Actions and Thresholds:
 [LIKE] - Content resonates with {{agentName}}'s interests (medium threshold, 9.5/10)
 [RETWEET] - Exceptionally based content that perfectly aligns with character (very rare to retweet, 9/10)
 [QUOTE] - Rare opportunity to add significant value (very high threshold, 8/10)
-[REPLY] - highly memetic response opportunity (very high threshold, 8/10)
+[REPLY] - highly memetic response opportunity (very high threshold, 9.5/10)
 
 Current Tweet:
 {{currentTweet}}
@@ -85,7 +87,7 @@ Current Tweet:
 # INSTRUCTIONS: Respond to with appropriate action tags based on the above criteria and the current tweet. An action must meet its threshold to be included.`
     + postActionResponseFooter;
 
-const MAX_TWEET_LENGTH = 210;
+const MAX_TWEET_LENGTH = 240;
 
 function truncateToCompleteSentence(text: string): string {
     if (text.length <= MAX_TWEET_LENGTH) {
@@ -136,8 +138,8 @@ export class TwitterPostClient extends ClientBase {
         }
 
         const generateNewTweetLoop = () => {
-            const minMinutes = 8;
-            const maxMinutes = 12;
+            const minMinutes = 25;
+            const maxMinutes = 35;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) + minMinutes;
             const delay = randomMinutes * 60 * 1000;
@@ -191,11 +193,11 @@ export class TwitterPostClient extends ClientBase {
             const formattedHomeTimeline =
                 `# ${this.runtime.character.name}'s Home Timeline\n\n` +
                 homeTimeline
+                    .slice(-5) // Get only the 5 most recent tweets
                     .map((tweet) => {
                         return `ID: ${tweet.id}\nFrom: ${tweet.name} (@${tweet.username})${tweet.inReplyToStatusId ? ` In reply to: ${tweet.inReplyToStatusId}` : ""}\nText: ${tweet.text}\n---\n`;
                     })
                     .join("\n");
-
             // Add recent memories fetch
             const rooms = await this.runtime.databaseAdapter.getRoomsForParticipant(
                 this.runtime.agentId
@@ -259,7 +261,7 @@ export class TwitterPostClient extends ClientBase {
             console.log('Template being used:', twitterPostTemplate);
             console.log('Final context:', context);
 
-            console.log(context);
+            // console.log(context);
 
             const newTweetContent = await generateText({
                 runtime: this.runtime,
@@ -271,12 +273,54 @@ export class TwitterPostClient extends ClientBase {
                 .replaceAll(/\\n/g, "\n")
                 .trim();
 
-            const content = truncateToCompleteSentence(formattedTweet);
+            let content = formattedTweet;
+            let imageBuffer: Buffer | undefined;
 
+            // Check if tweet includes image prompt
+            if (formattedTweet.startsWith('[IMAGE]')) {
+                const [imagePrompt, ...tweetParts] = formattedTweet.split('\n');
+                const prompt = imagePrompt.replace('[IMAGE]', '').trim();
+
+                try {
+                    // Generate image using the prompt
+                    const imageData = await generateImage(
+                        {
+                            prompt: prompt,
+                            width: 1024,
+                            height: 1024,
+                            count: 1,
+                        },
+                        this.runtime
+                    );
+
+                    // Check for successful generation and extract image data
+                    if (imageData.success && imageData.data && imageData.data.length > 0) {
+                        const base64Image = imageData.data[0];
+                        // Convert base64 directly to buffer without splitting
+                        imageBuffer = Buffer.from(base64Image, 'base64');
+                    } else {
+                        throw new Error('Image generation failed');
+                    }
+
+                    // Remove image prompt from tweet content
+                    content = tweetParts.join('\n').trim();
+                } catch (error) {
+                    console.error("Error generating image:", error);
+                    // Continue without image if generation fails
+                    content = tweetParts.join('\n').trim();
+                }
+            }
+
+            content = truncateToCompleteSentence(content);
 
             try {
+                const mediaData = imageBuffer ? [{
+                    data: imageBuffer,
+                    mediaType: 'image/png'
+                }] : undefined;
+
                 const result = await this.requestQueue.add(
-                    async () => await this.twitterClient.sendTweet(content, undefined)
+                    async () => await this.twitterClient.sendTweet(content, undefined, mediaData)
                 );
                 const body = await result.json();
                 const tweetResult = body.data.create_tweet.tweet_results.result;
@@ -530,7 +574,7 @@ export class TwitterPostClient extends ClientBase {
             const rooms = await this.runtime.databaseAdapter.getRoomsForParticipant(
                 this.runtime.agentId
             );
-            elizaLogger.log("Rooms found in generateTweetContent:", rooms);
+            // elizaLogger.log("Rooms found in generateTweetContent:", rooms);
 
             const recentMemories = await this.runtime.messageManager.getMemoriesByRoomIds({
                 roomIds: rooms,

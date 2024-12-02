@@ -115,7 +115,7 @@ export function getTokenForProvider(
                 settings.OPENAI_API_KEY
             );
         case ModelProviderName.LLAMACLOUD:
-            return (
+            const token = (
                 character.settings?.secrets?.LLAMACLOUD_API_KEY ||
                 settings.LLAMACLOUD_API_KEY ||
                 character.settings?.secrets?.TOGETHER_API_KEY ||
@@ -125,6 +125,12 @@ export function getTokenForProvider(
                 character.settings?.secrets?.OPENAI_API_KEY ||
                 settings.OPENAI_API_KEY
             );
+            console.log("LLAMACLOUD token resolution:", {
+                hasLlamacloudKey: !!character.settings?.secrets?.LLAMACLOUD_API_KEY,
+                hasTogetherKey: !!character.settings?.secrets?.TOGETHER_API_KEY,
+                finalToken: token ? "Present" : "Missing"
+            });
+            return token;
         case ModelProviderName.ANTHROPIC:
             return (
                 character.settings?.secrets?.ANTHROPIC_API_KEY ||
