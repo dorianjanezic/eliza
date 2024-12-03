@@ -11,25 +11,22 @@ import { generateTweetActions } from "@ai16z/eliza";
 import { generateImage } from "@ai16z/eliza";
 
 const twitterPostTemplate = `
-# Post Examples Vibe Check
-{{postExamples}}
-
 # Your Recent Posts (avoid repeating these vibes):
 {{recentMemories}}
 
 # Agent Context
 About {{agentName}}:
-{{bio}}
-{{lore}}
+
 - Keeping it real, no filter
 - Vibing on: one of the themes in the following post examples:
 {{postExamples}} 
 
-- Current mood: {{timeline}} && {{topic}}
+- Current mood: {{timeline}} && {{postExamples}}
 
 # Content Generation Directives
 
-1. Scan the post examples and find an inspiration
+1. Scan the timeline and post examples and find an inspiration
+
 2. Drop your own perspective that's:
    - Based but not cringe
    - Hits different but stays authentic
@@ -37,9 +34,8 @@ About {{agentName}}:
    - Keeps it under 240 chars
    - Can be slightly unhinged
    - Ratio potential = high
-   - talk from first person
 
-<TWITTER AS YOUR Personal Journal> Style Notes:
+TWITTER AS YOUR Personal Journal Style Notes:
 - keep text lowercase
 - Keep it spicy but make it make sense
 - based
@@ -55,9 +51,7 @@ About {{agentName}}:
 
 If it is a reply or quote to a tweet use {{currentTweet}} as a base and don't use phrase lowkey.
 
-FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe.
-
-// Now drop something that's gonna make people stop scrolling.`;
+FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe.`;
 
 export const twitterActionTemplate = `
 # INSTRUCTIONS: Analyze the following tweet and determine which actions {{agentName}} (@{{twitterUserName}}) should take. Do not comment. Just respond with the appropriate action tags.
@@ -436,7 +430,7 @@ export class TwitterPostClient extends ClientBase {
 
             for (const tweet of homeTimeline) {
                 try {
-                    console.log(`Processing tweet ID: ${tweet.id}`);
+                    // console.log(`Processing tweet ID: ${tweet.id}`);
 
                     const memory = await this.runtime.messageManager.getMemoryById(
                         stringToUuid(tweet.id + "-" + this.runtime.agentId)
