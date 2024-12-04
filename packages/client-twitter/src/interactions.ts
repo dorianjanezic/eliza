@@ -84,10 +84,11 @@ export class TwitterInteractionClient extends ClientBase {
         );
         const handleTwitterInteractionsLoop = () => {
             this.handleTwitterInteractions();
+            // Increase delay range to 15-45 minutes to reduce interaction frequency
             const delay =
-                (Math.floor(Math.random() * (5 - 2 + 1)) + 2) * 60 * 1000;
+                (Math.floor(Math.random() * (20 - 15 + 1)) + 15) * 60 * 1000;
             console.log(
-                `Scheduling next Twitter check in ${delay / 1000} seconds`
+                `Scheduling next Twitter check in ${Math.round(delay / 60000)} minutes`
             );
             setTimeout(handleTwitterInteractionsLoop, delay);
         };

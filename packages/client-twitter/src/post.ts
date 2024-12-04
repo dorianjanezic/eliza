@@ -115,7 +115,7 @@ export class TwitterPostClient extends ClientBase {
     private timelineLoopTimeout: NodeJS.Timeout | null = null;
     private lastProcessTime = 0;
     private isProcessing = false;
-    private readonly MIN_PROCESS_INTERVAL = 5 * 60 * 1000; // 5 minutes minimum between processes
+    private readonly MIN_PROCESS_INTERVAL = 15 * 60 * 1000; // 15 minutes minimum between processes
 
     constructor(runtime: IAgentRuntime) {
         super({
@@ -391,7 +391,7 @@ export class TwitterPostClient extends ClientBase {
             elizaLogger.error('❌ Error in timeline check:', error);
         } finally {
             // Schedule next check regardless of success/failure
-            const randomTimelineMinutes = Math.floor(Math.random() * (10 - 5 + 1)) + 5;
+            const randomTimelineMinutes = Math.floor(Math.random() * (30 - 15 + 1)) + 15;
             this.timelineLoopTimeout = setTimeout(
                 () => this.generateNewTimelineTweetLoop(),
                 randomTimelineMinutes * 60 * 1000

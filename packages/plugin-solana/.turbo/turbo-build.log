@@ -1,0 +1,22 @@
+
+
+> @ai16z/plugin-solana@0.1.5-alpha.0 build /Users/dorian/Documents/BeeLabs/komorebi/eliza/packages/plugin-solana
+> tsup --format esm --dts
+
+[34mCLI[39m Building entry: src/index.ts
+[34mCLI[39m Using tsconfig: tsconfig.json
+[34mCLI[39m tsup v8.3.5
+[34mCLI[39m Using tsup config: /Users/dorian/Documents/BeeLabs/komorebi/eliza/packages/plugin-solana/tsup.config.ts
+[34mCLI[39m Target: esnext
+[34mCLI[39m Cleaning output folder
+[34mESM[39m Build start
+[32mESM[39m [1mdist/chunk-VUNV25KB.js     [22m[32m657.00 B[39m
+[32mESM[39m [1mdist/lib-RTEYRPKK.js       [22m[32m31.90 KB[39m
+[32mESM[39m [1mdist/index.js              [22m[32m130.59 KB[39m
+[32mESM[39m [1mdist/chunk-VUNV25KB.js.map [22m[32m71.00 B[39m
+[32mESM[39m [1mdist/lib-RTEYRPKK.js.map   [22m[32m50.63 KB[39m
+[32mESM[39m [1mdist/index.js.map          [22m[32m264.11 KB[39m
+[32mESM[39m ⚡️ Build success in 73ms
+DTS Build start
+DTS ⚡️ Build success in 2448ms
+DTS dist/index.d.ts 15.88 KB
