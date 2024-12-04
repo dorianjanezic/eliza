@@ -638,6 +638,7 @@ export type Character = {
         evaluationTemplate?: string;
         twitterSearchTemplate?: string;
         twitterPostTemplate?: string;
+        twitterActionTemplate?: string;
         twitterMessageHandlerTemplate?: string;
         twitterShouldRespondTemplate?: string;
         farcasterPostTemplate?: string;
@@ -1155,3 +1156,10 @@ export type KnowledgeItem = {
     id: UUID;
     content: Content;
 };
+
+export interface ActionResponse {
+    like: boolean;
+    retweet: boolean;
+    quote?: boolean;
+    reply?: boolean;
+}

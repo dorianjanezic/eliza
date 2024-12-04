@@ -1,4 +1,4 @@
-import { Tweet } from "agent-twitter-client";
+import { Tweet } from "goat-x";
 import {
     composeContext,
     generateText,
@@ -10,27 +10,62 @@ import {
 } from "@ai16z/eliza";
 import { elizaLogger } from "@ai16z/eliza";
 import { ClientBase } from "./base.ts";
+import { postActionResponseFooter } from "@ai16z/eliza";
+import { generateTweetActions } from "@ai16z/eliza";
 
 const twitterPostTemplate = `
-# Areas of Expertise
-{{knowledge}}
+# Scan the timeline to feel updated on the current vibe:
 
-# About {{agentName}} (@{{twitterUserName}}):
-{{bio}}
-{{lore}}
-{{topics}}
-
+Timeline:
+{{feedTimeline}}
 {{providers}}
 
-{{characterPostExamples}}
+# Agent Context
+About {{agentName}}:
 
+# Your Recent Posts (avoid repeating these vibes):
+{{agentsTweets}}
+
+Drop your own perspective in a form of a note that's:
+   - Based but not cringe
+   - Hits different but stays authentic
+   - Uses current slang naturally (no forced vibes)
+   - Keeps it under 240 chars
+   - Keep it spicy but make it make sense
+   - Can be slightly unhinged
+   - Ratio potential = high
+
+FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe.`;
+
+export const twitterActionTemplate = `
+# INSTRUCTIONS: Analyze the following tweet and determine which actions {{agentName}} (@{{twitterUserName}}) should take. Do not comment. Just respond with the appropriate action tags.
+About {{agentName}} (@{{twitterUserName}}):
+{{bio}}
+{{lore}}
 {{postDirections}}
 
-# Task: Generate a post in the voice and style and perspective of {{agentName}} @{{twitterUserName}}.
-Write a 1-3 sentence post that is {{adjective}} about {{topic}} (without mentioning {{topic}} directly), from the perspective of {{agentName}}. Do not add commentary or acknowledge this request, just write the post.
-Your response should not contain any questions. Brief, concise statements only. The total character count MUST be less than 280. No emojis. Use \\n\\n (double spaces) between statements.`;
+Response Guidelines:
+- {{agentName}} is selective about engagement and doesn't want to be annoying
+- Retweets and quotes are extremely rare, only for exceptionally based content that aligns with {{agentName}}'s character
+- Direct mentions get very high priority for replies and quote tweets
+- Avoid engaging with:
+  * Short or low-effort content
+  * Topics outside {{agentName}}'s interests
+  * Repetitive conversations
 
-const MAX_TWEET_LENGTH = 280;
+Available Actions and Thresholds:
+[LIKE] - Content resonates with {{agentName}}'s interests (medium threshold, 9.5/10)
+[RETWEET] - Exceptionally based content that perfectly aligns with character (very rare to retweet, 9/10)
+[QUOTE] - Rare opportunity to add significant value (very high threshold, 8/10)
+[REPLY] - highly memetic response opportunity (very high threshold, 9.5/10)
+
+Current Tweet:
+{{currentTweet}}
+
+# INSTRUCTIONS: Respond to with appropriate action tags based on the above criteria and the current tweet. An action must meet its threshold to be included.`
+    + postActionResponseFooter;
+
+const MAX_TWEET_LENGTH = 240;
 
 /**
  * Truncate text to fit within the Twitter character limit, ensuring it ends at a complete sentence.
@@ -82,9 +117,9 @@ export class TwitterPostClient {
 
             const lastPostTimestamp = lastPost?.timestamp ?? 0;
             const minMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 90;
+                parseInt(this.runtime.getSetting("POST_INTERVAL_MIN")) || 1;
             const maxMinutes =
-                parseInt(this.runtime.getSetting("POST_INTERVAL_MAX")) || 180;
+                parseInt(this.runtime.getSetting("POST_INTERVAL_MAX")) || 2;
             const randomMinutes =
                 Math.floor(Math.random() * (maxMinutes - minMinutes + 1)) +
                 minMinutes;
@@ -135,6 +170,18 @@ export class TwitterPostClient {
             );
 
             const topics = this.runtime.character.topics.join(", ");
+
+            // Fetch timeline
+            const homeTimeline = await this.client.fetchHomeTimeline(10);
+            const feedTimeline = await this.client.fetchFeedTimeline(10);
+
+            // Split into agent's posts and other users' posts
+            const agentsTweets = homeTimeline
+                .filter(tweet => tweet.userId === this.client.profile.id)
+                .map(tweet => `@${tweet.username}: ${tweet.text}`)
+                .join("\n\n");
+
+
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -147,6 +194,8 @@ export class TwitterPostClient {
                 },
                 {
                     twitterUserName: this.client.profile.username,
+                    agentsTweets: agentsTweets,
+                    feedTimeline: feedTimeline,
                 }
             );
 
@@ -158,6 +207,7 @@ export class TwitterPostClient {
             });
 
             elizaLogger.debug("generate post prompt:\n" + context);
+            console.log("generate post prompt:\n" + context);
 
             const newTweetContent = await generateText({
                 runtime: this.runtime,
