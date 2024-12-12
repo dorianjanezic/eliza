@@ -139,12 +139,12 @@ export class TwitterInteractionClient {
                             tweetId
                         );
 
-                    if (existingResponse) {
-                        elizaLogger.log(
-                            `Already responded to tweet ${tweet.id}, skipping`
-                        );
-                        continue;
-                    }
+                        if (existingResponse) {
+                            elizaLogger.log(
+                                `Already responded to tweet from @${tweet.username}: "${tweet.text.substring(0, 50)}..." (ID: ${tweet.id})`
+                            );
+                            continue;
+                        }
                     elizaLogger.log("New Tweet found", tweet.permanentUrl);
 
                     const roomId = stringToUuid(
@@ -169,18 +169,24 @@ export class TwitterInteractionClient {
                         this.client
                     );
 
-                    const message = {
-                        content: { text: tweet.text },
-                        agentId: this.runtime.agentId,
-                        userId: userIdUUID,
-                        roomId,
-                    };
+                    // Before creating message, validate content
+                    if (tweet.text) {
+                        const message = {
+                            content: {
+                                text: tweet.text,
+                                action: "" // Initialize with empty string but not both empty
+                            },
+                            agentId: this.runtime.agentId,
+                            userId: userIdUUID,
+                            roomId,
+                        };
 
-                    await this.handleTweet({
-                        tweet,
-                        message,
-                        thread,
-                    });
+                        await this.handleTweet({
+                            tweet,
+                            message,
+                            thread,
+                        });
+                    }
 
                     // Update the last checked tweet ID after processing each tweet
                     this.client.lastCheckedTweetId = BigInt(tweet.id);
@@ -291,7 +297,7 @@ export class TwitterInteractionClient {
         const shouldRespond = await generateShouldRespond({
             runtime: this.runtime,
             context: shouldRespondContext,
-            modelClass: ModelClass.MEDIUM,
+            modelClass: ModelClass.LARGE,
         });
 
         // Promise<"RESPOND" | "IGNORE" | "STOP" | null> {
