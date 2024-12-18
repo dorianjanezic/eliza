@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { useWallet } from "@/context/WalletContext";
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 type Attachment = {
     id: string;
@@ -48,7 +48,7 @@ export default function Chat() {
     const mutation = useMutation({
         mutationFn: async (text: string) => {
             const res = await fetch(
-                `${API_URL}/bfcb1db4-c738-0c4c-b9a2-b2e6247d6347/message`,
+                `${API_URL.replace(/\/$/, '')}/bfcb1db4-c738-0c4c-b9a2-b2e6247d6347/message`,
                 {
                     method: "POST",
                     headers: {
