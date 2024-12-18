@@ -64,8 +64,12 @@ CRITICAL: NEVER TWEET THE SAME THING TWICE. HIGH VARIANCE in your posts.
 Always tweet bangers.
 Always start with a different word from your previous posts.
 
-Vibing on one of the themes in the following post references for sentence structure:
-{{postDirections}} && {{characterPostExamples}}
+
+# IMPORTANT
+- Vibing on one of the themes in the following post references
+- Use reference for sentence structure and theme of the post you are about to generate
+- analyze first words in the posts and use them accordingly in your next tweet
+{{characterPostExamples}}
 
 FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe. Write something different from your recent posts.`;
 

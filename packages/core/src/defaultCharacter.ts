@@ -4,7 +4,7 @@ import { Character, ModelProviderName, Clients } from "./types.ts";
 export const defaultCharacter: Character = {
     name: "komorebi",
     plugins: [],
-    clients: [Clients.TWITTER],
+    clients: [Clients.TWITTER, Clients.DISCORD],
     modelProvider: ModelProviderName.LLAMACLOUD,
     settings: {
         secrets: {
