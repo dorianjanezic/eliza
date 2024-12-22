@@ -110,7 +110,7 @@ Example response:
 \`\`\`json
 {
     "inputTokenSymbol": "SOL",
-    "outputTokenSymbol": "USDC", 
+    "outputTokenSymbol": "USDC",
     "inputTokenCA": "So11111111111111111111111111111111111111112",
     "outputTokenCA": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
     "amount": 1.5
@@ -125,7 +125,7 @@ Given the recent messages and wallet information below:
 
 Extract the following information about the requested token swap:
 - Input token symbol (the token being sold)
-- Output token symbol (the token being bought) 
+- Output token symbol (the token being bought)
 - Input token contract address if provided
 - Output token contract address if provided
 - Amount to swap
@@ -134,7 +134,7 @@ Respond with a JSON markdown block containing only the extracted values. Use nul
 \`\`\`json
 {
     "inputTokenSymbol": string | null,
-    "outputTokenSymbol": string | null, 
+    "outputTokenSymbol": string | null,
     "inputTokenCA": string | null,
     "outputTokenCA": string | null,
     "amount": number | string | null
@@ -403,40 +403,50 @@ export const executeSwap: Action = {
             }
 
             if (type === "buy") {
-                const tokenProvider = new TokenProvider(
-                    response.outputTokenCA,
-                    provider,
-                    runtime.cacheManager
-                );
-                const module = await import("better-sqlite3");
-                const Database = module.default;
-                const trustScoreDb = new TrustScoreDatabase(
-                    new Database(":memory:")
-                );
-                // add or get recommender
-                const uuid = uuidv4();
-                const recommender = await trustScoreDb.getOrCreateRecommender({
-                    id: uuid,
-                    address: walletPublicKey.toString(),
-                    solanaPubkey: walletPublicKey.toString(),
-                });
+                try {
+                    const tokenProvider = new TokenProvider(
+                        response.outputTokenCA,
+                        provider,
+                        runtime.cacheManager
+                    );
 
-                const trustScoreDatabase = new TrustScoreManager(
-                    runtime,
-                    tokenProvider,
-                    trustScoreDb
-                );
-                // save the trade
-                const tradeData = {
-                    buy_amount: response.amount,
-                    is_simulation: false,
-                };
-                await trustScoreDatabase.createTradePerformance(
-                    runtime,
-                    response.outputTokenCA,
-                    recommender.id,
-                    tradeData
-                );
+                    // Only attempt to create trust score DB if in Node.js environment
+                    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+                        const module = await import("better-sqlite3");
+                        const Database = module.default;
+                        const trustScoreDb = new TrustScoreDatabase(
+                            new Database(":memory:")
+                        );
+
+                        const uuid = uuidv4();
+                        const recommender = await trustScoreDb.getOrCreateRecommender({
+                            id: uuid,
+                            address: walletPublicKey.toString(),
+                            solanaPubkey: walletPublicKey.toString(),
+                        });
+
+                        const trustScoreDatabase = new TrustScoreManager(
+                            runtime,
+                            tokenProvider,
+                            trustScoreDb
+                        );
+
+                        const tradeData = {
+                            buy_amount: response.amount,
+                            is_simulation: false,
+                        };
+
+                        await trustScoreDatabase.createTradePerformance(
+                            runtime,
+                            response.outputTokenCA,
+                            recommender.id,
+                            tradeData
+                        );
+                    }
+                } catch (dbError) {
+                    // Log error but continue with swap
+                    console.warn("Failed to record trust score:", dbError);
+                }
             } else if (type === "sell") {
                 const tokenProvider = new TokenProvider(
                     response.inputTokenCA,

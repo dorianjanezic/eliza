@@ -4,8 +4,8 @@ import { Character, ModelProviderName, Clients } from "./types.ts";
 export const defaultCharacter: Character = {
     name: "komorebi",
     plugins: [],
-    clients: [Clients.TWITTER, Clients.DISCORD],
-    modelProvider: ModelProviderName.LLAMACLOUD,
+    clients: [],
+    modelProvider: ModelProviderName.ANTHROPIC,
     settings: {
         secrets: {
         },
@@ -15433,5 +15433,163 @@ export const defaultCharacter: Character = {
         ]
     },
     knowledge: [
+        `
+        import pandas as pd
+import numpy as np
+from typing import Dict, List, Tuple
+from dataclasses import dataclass
+
+@dataclass
+class RiskMetrics:
+    bot_risk_score: float
+    liquidity_risk_score: float
+    wallet_concentration_risk: float
+    time_risk_score: float
+
+@dataclass
+class MarketMetrics:
+    trading_velocity: float
+    price_momentum: float
+    volume_profile: float
+    holder_profile: float
+
+class TradingKnowledgeSystem:
+    def __init__(self):
+        self.risk_thresholds = {
+            'high_bot_concentration': 25.0,  # % of holdings
+            'low_liquidity': 1000.0,        # derived liquidity threshold
+            'high_wallet_concentration': 60.0,  # % held by top 10
+            'minimal_holder_count': 100,     # minimum unique holders
+        }
+
+        self.success_patterns = {
+            'fast_tp': 0.47,    # hours (average time to take profit)
+            'fail_threshold': 1.27,  # hours (average time to fail)
+            'healthy_bot_count': 8.62,  # average number of bots
+            'min_unique_traders': 274,  # average unique traders
+        }
+
+    def calculate_risk_metrics(self, token_data: Dict) -> RiskMetrics:
+        """Calculate risk metrics from token data"""
+        # Bot risk calculation
+        bot_risk = self._calculate_bot_risk(
+            token_data['number_of_bots'],
+            token_data['currently_held_percentage_of_bots']
+        )
+
+        # Liquidity risk calculation
+        liquidity_risk = self._calculate_liquidity_risk(
+            token_data['derived_liquidity'],
+            token_data['volume_24h']
+        )
+
+        # Wallet concentration risk
+        wallet_risk = self._calculate_wallet_risk(
+            token_data['top_10_percentage'],
+            token_data['unique_holders']
+        )
+
+        # Time-based risk
+        time_risk = self._calculate_time_risk(
+            token_data['hours_since_inception'],
+            token_data['time_to_fail'],
+            token_data['time_to_tp']
+        )
+
+        return RiskMetrics(bot_risk, liquidity_risk, wallet_risk, time_risk)
+
+    def calculate_market_metrics(self, token_data: Dict) -> MarketMetrics:
+        """Calculate market behavior metrics"""
+        trading_velocity = self._calculate_trading_velocity(
+            token_data['pumpfun_total_transactions'],
+            token_data['hours_since_inception']
+        )
+
+        price_momentum = self._calculate_price_momentum(
+            token_data['price_change_24h'],
+            token_data['volume_24h']
+        )
+
+        volume_profile = self._analyze_volume_profile(
+            token_data['volume_24h'],
+            token_data['derived_liquidity']
+        )
+
+        holder_profile = self._analyze_holder_profile(
+            token_data['pumpfun_neutral_holdings_percentage'],
+            token_data['pumpfun_hft_holdings_percentage'],
+            token_data['pumpfun_new_holdings_percentage']
+        )
+
+        return MarketMetrics(trading_velocity, price_momentum, volume_profile, holder_profile)
+
+    def generate_trading_signals(self,
+                               risk_metrics: RiskMetrics,
+                               market_metrics: MarketMetrics) -> Dict:
+        """Generate trading signals based on calculated metrics"""
+        risk_score = self._calculate_composite_risk(risk_metrics)
+        market_score = self._calculate_market_opportunity(market_metrics)
+
+        return {
+            'risk_level': risk_score,
+            'market_opportunity': market_score,
+            'recommended_action': self._determine_action(risk_score, market_score),
+            'confidence_score': self._calculate_confidence(risk_score, market_score)
+        }
+
+    def _calculate_bot_risk(self, bot_count: int, bot_holdings: float) -> float:
+        """Calculate risk score based on bot activity"""
+        base_risk = bot_holdings / self.risk_thresholds['high_bot_concentration']
+        bot_diversity = min(1.0, bot_count / self.success_patterns['healthy_bot_count'])
+        return base_risk * (1 - bot_diversity)
+
+    def _calculate_liquidity_risk(self, liquidity: float, volume: float) -> float:
+        """Calculate risk score based on liquidity metrics"""
+        if liquidity < self.risk_thresholds['low_liquidity']:
+            return 1.0
+        return min(1.0, self.risk_thresholds['low_liquidity'] / liquidity)
+
+    def _calculate_wallet_risk(self, top_10_pct: float, unique_holders: int) -> float:
+        """Calculate risk score based on wallet concentration"""
+        concentration_risk = top_10_pct / self.risk_thresholds['high_wallet_concentration']
+        holder_risk = self.risk_thresholds['minimal_holder_count'] / max(unique_holders, 1)
+        return min(1.0, (concentration_risk + holder_risk) / 2)
+
+    def _calculate_time_risk(self, hours_since_inception: float,
+                           time_to_fail: float, time_to_tp: float) -> float:
+        """Calculate time-based risk score"""
+        if hours_since_inception < time_to_fail:
+            return 0.8  # High risk during initial period
+        if time_to_tp and time_to_tp < self.success_patterns['fast_tp']:
+            return 0.4  # Moderate risk if within typical TP window
+        return min(1.0, hours_since_inception / self.success_patterns['fail_threshold'])
+
+    def _determine_action(self, risk_score: float, market_score: float) -> str:
+        """Determine recommended action based on risk and market scores"""
+        if risk_score > 0.8:
+            return 'AVOID'
+        if risk_score < 0.2 and market_score > 0.8:
+            return 'ENTER'
+        if 0.2 <= risk_score <= 0.5 and market_score > 0.6:
+            return 'MONITOR'
+        if risk_score > 0.5 and market_score < 0.3:
+            return 'EXIT'
+        return 'HOLD'
+
+    def _calculate_confidence(self, risk_score: float, market_score: float) -> float:
+        """Calculate confidence score for the recommendation"""
+        return 1 - abs(risk_score - market_score)
+
+    def update_knowledge(self, new_data: pd.DataFrame):
+        """Update internal knowledge based on new market data"""
+        # Update risk thresholds based on new data
+        self.risk_thresholds['high_bot_concentration'] = new_data['currently_held_percentage_of_bots'].quantile(0.75)
+        self.risk_thresholds['low_liquidity'] = new_data['derived_liquidity'].quantile(0.25)
+
+        # Update success patterns
+        self.success_patterns['fast_tp'] = new_data['time_to_tp'].mean()
+        self.success_patterns['fail_threshold'] = new_data['time_to_fail'].mean()
+        self.success_patterns['healthy_bot_count'] = new_data['number_of_bots'].mean()
+        self.success_patterns['min_unique_traders'] = new_data['pumpfun_unique_traders'].mean()`
     ],
 };

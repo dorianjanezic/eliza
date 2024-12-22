@@ -1,0 +1,23 @@
+{
+    "name": "@ai16z/plugin-supabase",
+    "version": "0.1.0",
+    "main": "dist/index.js",
+    "type": "module",
+    "types": "dist/index.d.ts",
+    "dependencies": {
+        "@ai16z/eliza": "workspace:*",
+        "ws": "^8.13.0"
+    },
+    "devDependencies": {
+        "tsup": "8.3.5",
+        "typescript": "^5.0.0"
+    },
+    "scripts": {
+        "build": "tsup src/index.ts --format esm --dts --target=esnext",
+        "dev": "tsup src/index.ts --format esm --dts --watch --target=esnext",
+        "lint": "eslint . --fix"
+    },
+    "peerDependencies": {
+        "whatwg-url": "7.1.0"
+    }
+}

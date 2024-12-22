@@ -1144,6 +1144,7 @@ export enum ServiceType {
     SPEECH_GENERATION = "speech_generation",
     PDF = "pdf",
     BUTTPLUG = "buttplug",
+    SUPABASE = "supabase",
 }
 
 export enum LoggingLevel {

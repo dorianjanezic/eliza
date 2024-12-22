@@ -5,6 +5,9 @@
         "rootDir": "src"
     },
     "include": [
-        "src/**/*.ts"
+        "src/**/*.ts",
+        "../plugin-supabase/supaBaseRealtimeClient.ts",
+        "../plugin-supabase/supaBaseMessageManager.ts",
+        "../plugin-supabase/tokenAnalyzer.ts"
     ]
 }

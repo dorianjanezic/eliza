@@ -300,3 +300,100 @@ export interface CalculatedBuyAmounts {
     medium: number;
     high: number;
 }
+
+export interface PumpFunTokenData {
+    // Time-Related
+    raydium_datetime: number;
+    inception_datetime: number;
+    hours_since_inception: number;
+    hours_since_token_fetched: number;
+    time_to_fail?: number;
+    time_to_tp?: number;
+
+    // Token Metrics
+    unique_holders: number;
+    market_cap: number;
+    price_change_24h: number;
+    volume_24h: number;
+    derived_liquidity: number;
+    derived_relative_bots: number;
+
+    // Similarity Metrics
+    name_similarity: number;
+    symbol_similarity: number;
+
+    // Holder Distribution
+    top_10_percentage: number;
+    dev_token_percentage: number;
+    raydium_holders_percentage: number;
+    og_holders_percentage: number;
+
+    // Bundle Related
+    number_of_bundles: number;
+    bundle_max_unique_wallets: number;
+    bundle_max_percent_held: number;
+    bundle_wallet_holdings_percentage: number;
+
+    // Bot Related
+    number_of_bots: number;
+    currently_held_percentage_of_bots: number;
+
+    // Pumpfun Platform Metrics
+    pumpfun_unique_traders: number;
+    pumpfun_top_10_holders_percentage: number;
+    pumpfun_total_transactions: number;
+    pumpfun_reply_count: number;
+    pumpfun_total_volume_sol: number;
+    pumpfun_neutral_count: number;
+    pumpfun_hft_count: number;
+    pumpfun_new_count: number;
+    pumpfun_neutral_holdings_percentage: number;
+    pumpfun_hft_holdings_percentage: number;
+    pumpfun_new_holdings_percentage: number;
+
+    // Developer Wallet Activity
+    dev_wallet_buy_volume: number;
+    dev_wallet_sell_volume: number;
+    dev_wallet_buy_count: number;
+    dev_wallet_sell_count: number;
+    dev_wallet_flag: 'neutral' | 'new' | 'hft';
+
+    // Combined Metrics
+    wallet_bundle_total_holdings_percentage: number;
+}
+
+export interface TokenData {
+    mint: string;
+    name?: string | null;
+    symbol?: string | null;
+    description?: string | null;
+    website?: string | null;
+    twitter?: string | null;
+    price_usd: number | null;
+    market_cap: number | null;
+    volume_24h: number | null;
+    price_change_24h: number | null;
+    liquidity_usd: number | null;
+    unique_holders: number | null;
+    fdv: number | null;
+    is_pumpfun: boolean;
+    pumpfun_unique_traders: number;
+    pumpfun_total_volume_sol: number;
+    pumpfun_top_10_holders_percentage: number;
+    pumpfun_reply_count: number;
+    pumpfun_neutral_count: number;
+    pumpfun_hft_count: number;
+    pumpfun_new_count: number;
+    pumpfun_total_transactions: number;
+    pumpfun_hft_holdings_percentage: number;
+    pumpfun_neutral_holdings_percentage: number;
+    pumpfun_new_holdings_percentage: number;
+    dev_wallet_id?: string | null;
+    dev_wallet_flag: string;
+    dev_wallet_buy_count: number;
+    dev_wallet_sell_count: number;
+    dev_wallet_buy_volume: number;
+    dev_wallet_sell_volume: number;
+    inception_datetime: string;
+    created_at: string;
+}

@@ -156,6 +156,9 @@ importers:
       '@ai16z/plugin-starknet':
         specifier: workspace:*
         version: link:../packages/plugin-starknet
+      '@ai16z/plugin-supabase':
+        specifier: workspace:*
+        version: link:../packages/plugin-supabase
       '@ai16z/plugin-tee':
         specifier: workspace:*
         version: link:../packages/plugin-tee
@@ -1132,6 +1135,9 @@ importers:
       '@solana/web3.js':
         specifier: 1.95.8
         version: 1.95.8(bufferutil@4.0.8)(encoding@0.1.13)(utf-8-validate@5.0.10)
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.5.13
       bignumber:
         specifier: 1.1.0
         version: 1.1.0
@@ -1159,6 +1165,9 @@ importers:
       whatwg-url:
         specifier: 7.1.0
         version: 7.1.0
+      ws:
+        specifier: 8.18.0
+        version: 8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
 
   packages/plugin-starknet:
     dependencies:
@@ -1189,6 +1198,19 @@ importers:
       whatwg-url:
         specifier: 7.1.0
         version: 7.1.0
+
+  packages/plugin-supabase:
+    dependencies:
+      '@ai16z/eliza':
+        specifier: workspace:*
+        version: link:../core
+      ws:
+        specifier: ^8.0.0
+        version: 8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+    devDependencies:
+      tsup:
+        specifier: 8.3.5
+        version: 8.3.5(@swc/core@1.10.0(@swc/helpers@0.5.15))(jiti@2.4.0)(postcss@8.4.49)(typescript@5.6.3)(yaml@2.6.1)
 
   packages/plugin-tee:
     dependencies:
