@@ -606,7 +606,7 @@ export enum Clients {
 /**
  * Configuration for an agent character
  */
-export type Character = {
+export interface Character {
     /** Optional unique identifier */
     id?: UUID;
 
@@ -731,7 +731,7 @@ export type Character = {
         bio: string;
         nicknames?: string[];
     };
-};
+}
 
 /**
  * Interface for database operations

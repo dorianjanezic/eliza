@@ -32,4 +32,4 @@
 
 ## Defined in
 
-[packages/core/src/types.ts:1128](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1128)
+[packages/core/src/types.ts:1129](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1129)

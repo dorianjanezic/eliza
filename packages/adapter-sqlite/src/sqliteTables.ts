@@ -92,6 +92,13 @@ CREATE TABLE IF NOT EXISTS "cache" (
     PRIMARY KEY ("key", "agentId")
 );
 
+-- Table: processed_tokens
+CREATE TABLE IF NOT EXISTS "processed_tokens" (
+    "token_id" TEXT PRIMARY KEY,
+    "processed_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    "status" TEXT DEFAULT 'completed'
+);
+
 -- Index: relationships_id_key
 CREATE UNIQUE INDEX IF NOT EXISTS "relationships_id_key" ON "relationships" ("id");
 

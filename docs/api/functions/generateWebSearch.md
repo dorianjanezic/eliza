@@ -16,4 +16,4 @@
 
 ## Defined in
 
-[packages/core/src/generation.ts:1022](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/generation.ts#L1022)
+[packages/core/src/generation.ts:1024](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/generation.ts#L1024)

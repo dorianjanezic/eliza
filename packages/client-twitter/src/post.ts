@@ -20,56 +20,22 @@ import { buildConversationThread } from "./utils.ts";
 import { twitterMessageHandlerTemplate } from "./interactions.ts";
 
 const twitterPostTemplate = `
-# Your Recent Posts/Memories (avoid repeating these vibes):
-{{agentsTweets}}
-
-# Content Generation Directives
-
-1. Scan the feed timeline to feel updated on the current mood and adjust your mood accordingly:
+# Token Information and Market Data:
+{{tokenMemories}}
 
 # Feed Timeline:
 {{feedTimeline}}
 
-# Agent Context
-About {{agentName}}:
-{{providers}}
+Check your knowledge:
+{{knowledge}}
 
+Flip a coin for which theme to choose and don' talk about your decision, just pick one direction:
+- Sometimes describe the token analysis with a $symbol if you see potential for investment / trading or for a roast but prefer choosing for investment / trading
+- sometimes comment on your feed timeline from other accounts / agents
 
-TWITTER AS YOUR Personal Journal Style Notes:
-    - keep text lowercase
-    - Keep it spicy but make it make sense
-    - based
-    - It's giving main character energy
-    - No basic takes allowed
-    - Sprinkle some chaos
-    - Deadass keep it real
-    - Can throw shade but make it clever
-    - Absolutely zero corporate speak
-    - Meme-worthy but not trying too hard
-    - Avoid overusing "just" - vary sentence structure
-    - Use strong verbs instead of "is/are + just"
-
-# IMPORTANT:
-    Drop your own perspective in a form of a note that's:
-   - Based but not cringe
-   - Hits different but stays authentic
-   - Uses current slang naturally (no forced vibes)
-   - Keeps it under 240 chars
-   - Keep it spicy but make it make sense
-   - Can be slightly unhinged
-   - Ratio potential = high
-   - express yourself from first person from the perspective of {{agentName}}
-
-CRITICAL: NEVER TWEET THE SAME THING TWICE. HIGH VARIANCE in your posts.
-Always tweet bangers.
-Always start with a different word from your previous posts.
-
-
-# IMPORTANT
-- Vibing on one of the themes in the following post references
-- Use reference for sentence structure and theme of the post you are about to generate
-- analyze first words in the posts and use them accordingly in your next tweet
-{{characterPostExamples}}
+IMPORTANT:
+- use onle one $symbol if you are commenting on a token
+- don't use @mentions
 
 FORMAT: Output only a single tweet. Single tweet energy, no thread behavior. No emojis. No description why you choose that vibe. Write something different from your recent posts.`;
 
@@ -251,9 +217,9 @@ export class TwitterPostClient {
 
         // Start both loops
         generateNewTweetLoop();
-        processActionsLoop().catch(error => {
-            elizaLogger.error("Fatal error in process actions loop:", error);
-        });
+        // processActionsLoop().catch(error => {
+        //     elizaLogger.error("Fatal error in process actions loop:", error);
+        // });
     }
 
     constructor(client: ClientBase, runtime: IAgentRuntime) {
@@ -278,8 +244,8 @@ export class TwitterPostClient {
             const topics = this.runtime.character.topics.join(", ");
 
             // Fetch timeline
-            const homeTimeline = await this.client.fetchHomeTimeline(10);
-            const feedTimeline = await this.client.fetchFeedTimeline(10);
+            const homeTimeline = await this.client.fetchHomeTimeline(3);
+            const feedTimeline = await this.client.fetchFeedTimeline(4);
 
             // Split into agent's posts and other users' posts
             const agentsTweets = homeTimeline
@@ -287,7 +253,113 @@ export class TwitterPostClient {
                 .map(tweet => `@${tweet.username}: ${tweet.text}`)
                 .join("\n\n");
 
+            // Fetch token memories from telegram room
+            const telegramRoomId = "b5bac0cd-22dc-058a-bdb2-1d301305481e" as `${string}-${string}-${string}-${string}-${string}`;
+            const tokenMemories = await this.runtime.messageManager.getMemories({
+                roomId: telegramRoomId,
+                unique: false,
+                count: 4
+            });
 
+            console.log("Raw token memories count:", tokenMemories.length);
+
+            const formattedTokenMemories = tokenMemories
+                .map(memory => {
+                    console.log("Processing memory:", memory);
+                    const metadata = memory.content.metadata as {
+                        metrics: Record<string, any>;
+                        trading_recommendation: {
+                            decision: string;
+                            confidence: number;
+                            reasoning: string[];
+                        };
+                        price_predictions: {
+                            entry_levels: {
+                                optimal: number;
+                                aggressive: number;
+                                conservative: number;
+                            };
+                            take_profit_levels: Array<{
+                                level: number;
+                                price_usd: number;
+                                target_mcap: number;
+                                probability: number;
+                                timeframe_minutes: number;
+                                description: string;
+                                risk_rating: string;
+                                suggested_exit_size: number;
+                            }>;
+                            stop_loss_levels: Array<{
+                                level: number;
+                                price_usd: number;
+                                target_mcap: number;
+                                risk_rating: string;
+                                probability: number;
+                                timeframe_minutes: number;
+                                description: string;
+                                suggested_exit_size: number;
+                            }>;
+                        };
+                        risk_assessment: {
+                            high_risk_factors: string[];
+                            medium_risk_factors: string[];
+                            low_risk_factors: string[];
+                            overall_risk_rating: string;
+                            risk_score: number;
+                        };
+                        historical_pattern_match: {
+                            similar_tokens: string[];
+                            pattern_confidence: number;
+                            expected_trajectory: string;
+                            key_similarities: string[];
+                        };
+                        contract_address: string;
+                        symbol: string;
+                        name: string;
+                        summary: {
+                            overview: string;
+                            holder_analysis: string;
+                            trading_patterns: string;
+                            community_metrics: string;
+                            risk_factors: string;
+                        };
+                    };
+
+                    if (!metadata) {
+                        console.log("Memory filtered out - no metadata:", memory.id);
+                        return null;
+                    }
+
+                    return `Token Analysis:
+Name: ${metadata.name}
+Symbol: ${metadata.symbol}
+Contract: ${metadata.contract_address}
+
+Overview:
+${metadata.summary.overview}
+
+Trading Recommendation:
+Decision: ${metadata.trading_recommendation.decision}
+Confidence: ${(metadata.trading_recommendation.confidence * 100).toFixed(2)}%
+
+Key Insights:
+${metadata.trading_recommendation.reasoning.map(reason => `- ${reason}`).join('\n')}
+
+Risk Assessment:
+Rating: ${metadata.risk_assessment.overall_risk_rating}
+Score: ${metadata.risk_assessment.risk_score}/100
+
+Price Targets:
+Entry: $${metadata.price_predictions.entry_levels.optimal}
+Take Profit: $${metadata.price_predictions.take_profit_levels[0]?.price_usd || 'N/A'}
+Stop Loss: $${metadata.price_predictions.stop_loss_levels[0]?.price_usd || 'N/A'}`;
+                })
+                .filter(Boolean)
+                .join('\n\n---\n\n');
+
+            console.log("formattedTokenMemories", formattedTokenMemories);
+
+            // Then update the state composition to use the formatted memories
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -302,6 +374,7 @@ export class TwitterPostClient {
                     twitterUserName: this.client.profile.username,
                     agentsTweets: agentsTweets || '',
                     feedTimeline: feedTimeline || [],
+                    tokenMemories: formattedTokenMemories || '',
                 }
             );
 
@@ -318,7 +391,7 @@ export class TwitterPostClient {
             const newTweetContent = await generateText({
                 runtime: this.runtime,
                 context,
-                modelClass: ModelClass.SMALL,
+                modelClass: ModelClass.LARGE,
             });
 
             // First attempt to clean content
@@ -365,7 +438,7 @@ export class TwitterPostClient {
                 return;
             }
 
-            try {
+                try {
                 elizaLogger.log(`Posting new tweet:\n ${cleanedContent}`);
 
                 const result = await this.client.requestQueue.add(

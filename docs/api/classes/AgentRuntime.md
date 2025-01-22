@@ -31,7 +31,7 @@ The number of messages to hold in the recent message cache.
 
 Optional ID of the agent.
 
-• **opts.character?**: [`Character`](../type-aliases/Character.md)
+• **opts.character?**: [`Character`](../interfaces/Character.md)
 
 • **opts.token**: `string`
 
@@ -282,7 +282,7 @@ Some environments may not have access to the global fetch function and need a cu
 
 ### character
 
-> **character**: [`Character`](../type-aliases/Character.md)
+> **character**: [`Character`](../interfaces/Character.md)
 
 The character to use for the agent
 

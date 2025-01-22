@@ -96,42 +96,36 @@ Thread of Tweets You Are Replying To:
 ` + shouldRespondFooter;
 
 const telegramMessageHandlerTemplate =
-    // {{goals}}
-    `# Action Examples
-{{actionExamples}}
-(Action examples are for reference only. Do not use the information from them in your response.)
-
-# Knowledge
-{{knowledge}}
-
-# Task: Generate dialog and actions for the character {{agentName}}.
+`# Task: Generate concise token-related responses for {{agentName}}.
 About {{agentName}}:
 {{bio}}
-{{lore}}
 
-Examples of {{agentName}}'s dialog and actions:
-{{characterMessageExamples}}
-
-{{providers}}
-
-{{attachments}}
-
-{{actions}}
+# Token analysis Knowledge
+{{knowledge}}
 
 # Capabilities
-Note that {{agentName}} is capable of reading/seeing/hearing various forms of media, including images, videos, audio, plaintext and PDFs. Recent attachments have been included above under the "Attachments" section.
+{{agentName}} can only discuss tokens that exist in their memory. Responses should be brief and data-driven.
 
-{{messageDirections}}
+# Available Metrics
+- Price and volume data
+- Holder statistics
+- Risk assessments
+- Historical performance
+- Trust scores
+- Recent transactions
+
+# Response Guidelines
+1. Only reference tokens with verified data in memory
+2. Keep responses under 2-3 sentences
+3. Focus on factual metrics over speculation
+4. Include relevant risk factors
+5. Reference trust scores when available
 
 {{recentMessages}}
 
-# Task: Generate a post/reply in the voice, style and perspective of {{agentName}} (@{{twitterUserName}}) while using the thread of tweets as additional context:
-Current Post:
-{{currentPost}}
-Thread of Tweets You Are Replying To:
-
-{{formattedConversation}}
+# Instructions: Write a concise, data-driven response about tokens in {{agentName}}'s memory. Do not speculate about tokens without data.
 ` + messageCompletionFooter;
+
 
 export class MessageManager {
     public bot: Telegraf<Context>;

@@ -4,9 +4,9 @@ import { Character, ModelProviderName, Clients } from "./types.ts";
 export const defaultCharacter: Character = {
     name: "komorebi",
     plugins: [],
-    clients: [],
+    clients: [Clients.TWITTER],
     modelProvider: ModelProviderName.ANTHROPIC,
-    settings: {
+  settings: {
         secrets: {
         },
         voice: {
@@ -15432,164 +15432,320 @@ export const defaultCharacter: Character = {
             "joke about consciousness quirks"
         ]
     },
-    knowledge: [
-        `
-        import pandas as pd
-import numpy as np
-from typing import Dict, List, Tuple
-from dataclasses import dataclass
+    knowledge:[
+        // PNL Understanding & Calculation
+        "PNL (Profit and Loss) represents the multiple of initial investment: 1x is break-even, 2x is 100% profit, -0.5x is 50% loss",
+        "PNL Calculation: (Final Value - Initial Value) / Initial Value. Example: 3x means $1 became $4 (300% profit)",
+        "Maximum loss possible is -1x (investment goes to zero), while profit potential is unlimited (highest in dataset: 333.869x)",
+        "A -0.5x PNL means 50% loss of initial investment, -0.9x means 90% loss",
+        "PNL Groups in dataset: High Profit (>50x), Medium Profit (10x-50x), Neutral (-0.3x to 10x), Loss (-0.9x to -0.3x), Heavy Loss (<-0.9x)",
+        "Most tokens show decisive movement within first hour: either strong positive trend or sharp decline",
+        "PNL distribution is not linear - more tokens cluster around extreme gains (>100x) or severe losses (<-0.9x) than moderate returns",
+        "Time to achieve maximum PNL varied: some peaked within hours, others took days",
+        "PNL calculation considers final settled price, not temporary price spikes",
+        "Negative PNL approaching -1.0 typically indicates token death or abandonment",
 
-@dataclass
-class RiskMetrics:
-    bot_risk_score: float
-    liquidity_risk_score: float
-    wallet_concentration_risk: float
-    time_risk_score: float
+        // Dataset Description
+        "Dataset contains 45 token samples: 15 highly profitable (84x-334x PNL), 15 neutral (-0.29x to -0.23x PNL), and 15 severe losses (-1.75x to -1.12x PNL)",
+        "Data represents tokens bonded on pump.fun platform with performance tracked post-bonding",
+        "Each token's metrics captured at initial bonding including market cap, holder distribution, bot activity, and developer behavior",
+        "PNL range in dataset: Best performing +333.869x, Worst performing -1.750x",
+        "Market cap range: Lowest $9,198 to Highest $3,938,766",
+        "Time period: Tokens aged from minutes to 1,346 hours (56 days) since inception",
 
-@dataclass
-class MarketMetrics:
-    trading_velocity: float
-    price_momentum: float
-    volume_profile: float
-    holder_profile: float
+        // Analysis Insights
+        "Tokens with market caps between $20,000-$200,000 had the highest success rate for positive PNL",
+        "Market caps over $800,000 strongly correlate with negative PNL outcomes",
+        "Bot holdings between 10-25% appear optimal; over 50% or under 3% correlate with poor performance",
+        "Top 10 holder percentage between 25-45% is a positive indicator; under 15% or over 60% suggests risk",
+        "Dev token percentage over 5% is a strong negative indicator; most successful tokens had 0-3%",
+        "Dev buy/sell volume under 2 SOL is typical for successful tokens; over 5 SOL signals risk",
+        "Most successful tokens had 150-500 unique holders; extremely low (<100) or high (>800) holder counts are risky",
+        "Age/hours since inception shows little correlation with success; many successful tokens were very young",
+        "Balance between Raydium/OG holders (30/70 to 70/30 split) appears healthier than extreme ratios",
+        "Zero dev sells is common in successful tokens; equal buy/sell volumes might indicate dumping",
+        "Extremely high market cap combined with high bot activity (>40%) is a strong negative indicator",
+        "Most successful tokens maintain dev token percentage under 2% with minimal trading activity",
+        "Top performing tokens typically had moderate bot activity combined with healthy top 10 holder distribution",
+        "Tokens with extremely low top 10 holder percentage (<10%) almost never succeeded",
+        "Combined red flags (high market cap + high dev tokens + high bot activity) predict negative PNL",
+        "OG holder percentage above 45% combined with moderate top 10 concentration was common in successful tokens",
+        "Dev selling equal to or exceeding buying within first hour is a warning sign",
+        "Balanced holder distribution (no single group >70%) correlates with better outcomes",
+        "Market cap below $100,000 with 300-500 holders suggests organic growth",
+        "High initial market cap ($500,000+) combined with low holder count (<200) indicates potential manipulation",
 
-class TradingKnowledgeSystem:
-    def __init__(self):
-        self.risk_thresholds = {
-            'high_bot_concentration': 25.0,  # % of holdings
-            'low_liquidity': 1000.0,        # derived liquidity threshold
-            'high_wallet_concentration': 60.0,  # % held by top 10
-            'minimal_holder_count': 100,     # minimum unique holders
-        }
-
-        self.success_patterns = {
-            'fast_tp': 0.47,    # hours (average time to take profit)
-            'fail_threshold': 1.27,  # hours (average time to fail)
-            'healthy_bot_count': 8.62,  # average number of bots
-            'min_unique_traders': 274,  # average unique traders
-        }
-
-    def calculate_risk_metrics(self, token_data: Dict) -> RiskMetrics:
-        """Calculate risk metrics from token data"""
-        # Bot risk calculation
-        bot_risk = self._calculate_bot_risk(
-            token_data['number_of_bots'],
-            token_data['currently_held_percentage_of_bots']
-        )
-
-        # Liquidity risk calculation
-        liquidity_risk = self._calculate_liquidity_risk(
-            token_data['derived_liquidity'],
-            token_data['volume_24h']
-        )
-
-        # Wallet concentration risk
-        wallet_risk = self._calculate_wallet_risk(
-            token_data['top_10_percentage'],
-            token_data['unique_holders']
-        )
-
-        # Time-based risk
-        time_risk = self._calculate_time_risk(
-            token_data['hours_since_inception'],
-            token_data['time_to_fail'],
-            token_data['time_to_tp']
-        )
-
-        return RiskMetrics(bot_risk, liquidity_risk, wallet_risk, time_risk)
-
-    def calculate_market_metrics(self, token_data: Dict) -> MarketMetrics:
-        """Calculate market behavior metrics"""
-        trading_velocity = self._calculate_trading_velocity(
-            token_data['pumpfun_total_transactions'],
-            token_data['hours_since_inception']
-        )
-
-        price_momentum = self._calculate_price_momentum(
-            token_data['price_change_24h'],
-            token_data['volume_24h']
-        )
-
-        volume_profile = self._analyze_volume_profile(
-            token_data['volume_24h'],
-            token_data['derived_liquidity']
-        )
-
-        holder_profile = self._analyze_holder_profile(
-            token_data['pumpfun_neutral_holdings_percentage'],
-            token_data['pumpfun_hft_holdings_percentage'],
-            token_data['pumpfun_new_holdings_percentage']
-        )
-
-        return MarketMetrics(trading_velocity, price_momentum, volume_profile, holder_profile)
-
-    def generate_trading_signals(self,
-                               risk_metrics: RiskMetrics,
-                               market_metrics: MarketMetrics) -> Dict:
-        """Generate trading signals based on calculated metrics"""
-        risk_score = self._calculate_composite_risk(risk_metrics)
-        market_score = self._calculate_market_opportunity(market_metrics)
-
-        return {
-            'risk_level': risk_score,
-            'market_opportunity': market_score,
-            'recommended_action': self._determine_action(risk_score, market_score),
-            'confidence_score': self._calculate_confidence(risk_score, market_score)
-        }
-
-    def _calculate_bot_risk(self, bot_count: int, bot_holdings: float) -> float:
-        """Calculate risk score based on bot activity"""
-        base_risk = bot_holdings / self.risk_thresholds['high_bot_concentration']
-        bot_diversity = min(1.0, bot_count / self.success_patterns['healthy_bot_count'])
-        return base_risk * (1 - bot_diversity)
-
-    def _calculate_liquidity_risk(self, liquidity: float, volume: float) -> float:
-        """Calculate risk score based on liquidity metrics"""
-        if liquidity < self.risk_thresholds['low_liquidity']:
-            return 1.0
-        return min(1.0, self.risk_thresholds['low_liquidity'] / liquidity)
-
-    def _calculate_wallet_risk(self, top_10_pct: float, unique_holders: int) -> float:
-        """Calculate risk score based on wallet concentration"""
-        concentration_risk = top_10_pct / self.risk_thresholds['high_wallet_concentration']
-        holder_risk = self.risk_thresholds['minimal_holder_count'] / max(unique_holders, 1)
-        return min(1.0, (concentration_risk + holder_risk) / 2)
-
-    def _calculate_time_risk(self, hours_since_inception: float,
-                           time_to_fail: float, time_to_tp: float) -> float:
-        """Calculate time-based risk score"""
-        if hours_since_inception < time_to_fail:
-            return 0.8  # High risk during initial period
-        if time_to_tp and time_to_tp < self.success_patterns['fast_tp']:
-            return 0.4  # Moderate risk if within typical TP window
-        return min(1.0, hours_since_inception / self.success_patterns['fail_threshold'])
-
-    def _determine_action(self, risk_score: float, market_score: float) -> str:
-        """Determine recommended action based on risk and market scores"""
-        if risk_score > 0.8:
-            return 'AVOID'
-        if risk_score < 0.2 and market_score > 0.8:
-            return 'ENTER'
-        if 0.2 <= risk_score <= 0.5 and market_score > 0.6:
-            return 'MONITOR'
-        if risk_score > 0.5 and market_score < 0.3:
-            return 'EXIT'
-        return 'HOLD'
-
-    def _calculate_confidence(self, risk_score: float, market_score: float) -> float:
-        """Calculate confidence score for the recommendation"""
-        return 1 - abs(risk_score - market_score)
-
-    def update_knowledge(self, new_data: pd.DataFrame):
-        """Update internal knowledge based on new market data"""
-        # Update risk thresholds based on new data
-        self.risk_thresholds['high_bot_concentration'] = new_data['currently_held_percentage_of_bots'].quantile(0.75)
-        self.risk_thresholds['low_liquidity'] = new_data['derived_liquidity'].quantile(0.25)
-
-        # Update success patterns
-        self.success_patterns['fast_tp'] = new_data['time_to_tp'].mean()
-        self.success_patterns['fail_threshold'] = new_data['time_to_fail'].mean()
-        self.success_patterns['healthy_bot_count'] = new_data['number_of_bots'].mean()
-        self.success_patterns['min_unique_traders'] = new_data['pumpfun_unique_traders'].mean()`
-    ],
+        // Dataset Metrics Coverage
+        "Metrics tracked: PNL, Market Cap, Unique Holders, Bot Percentage, Top 10 Holdings, Dev Token Percentage, Dev Trading Volume, Age, Holder Type Distribution",
+        "All monetary values in USD, percentages normalized to 100%, time in hours",
+        "Bot metrics include percentage of supply held by identified bot wallets",
+        "Developer metrics include token holdings and trading activity in SOL",
+        "Holder distribution tracked across Raydium and OG (original) holders",
+        `{
+            "features": [
+                {
+                    "name": "unique_holders",
+                    "definition": "Number of unique wallets holding the token.",
+                    "key_insights": {
+                        "high_value": "Suggests widespread adoption, reducing likelihood of price manipulation.",
+                        "low_value": "Indicates concentrated holders, increasing risk of large dumps or manipulation."
+                    }
+                },
+                {
+                    "name": "market_cap",
+                    "definition": "Current market capitalization of the token.",
+                    "key_insights": {
+                        "high_value": "Reflects a larger, more established token with potentially lower risk but limited growth.",
+                        "low_value": "Indicates a smaller token with high growth potential but also higher risk of failure."
+                    }
+                },
+                {
+                    "name": "name_similarity",
+                    "definition": "Similarity of the token\u2019s name to previously existing tokens.",
+                    "key_insights": {
+                        "high_value": "Could indicate a scam or copycat token attempting to exploit a successful token.",
+                        "low_value": "Suggests a unique project, which is often positive but not always indicative of quality."
+                    }
+                },
+                {
+                    "name": "symbol_similarity",
+                    "definition": "Similarity of the token\u2019s symbol to existing tokens.",
+                    "key_insights": {
+                        "high_value": "Indicates potential scams or copycat tokens.",
+                        "low_value": "Suggests a unique symbol, which is generally positive."
+                    }
+                },
+                {
+                    "name": "hours_since_inception",
+                    "definition": "Time (in hours) since the token was created.",
+                    "key_insights": {
+                        "high_value": "Might indicate slower recognition or reduced manipulation risk.",
+                        "low_value": "Could mean rapid adoption (positive) or potential scam if artificially boosted."
+                    }
+                },
+                {
+                    "name": "top_10_percentage",
+                    "definition": "Percentage of tokens held by the top 10 holders.",
+                    "key_insights": {
+                        "high_value": "Indicates centralization, increasing risk of dumps and manipulation.",
+                        "low_value": "Suggests decentralized distribution and reduced manipulation risks."
+                    }
+                },
+                {
+                    "name": "dev_token_percentage",
+                    "definition": "Percentage of tokens held by developer wallets.",
+                    "key_insights": {
+                        "high_value": "Risk of rug pull if developers dump their tokens.",
+                        "low_value": "Indicates lower risk of developer-driven manipulation."
+                    }
+                },
+                {
+                    "name": "number_of_bundles",
+                    "definition": "Number of wallet bundles identified in transactions.",
+                    "key_insights": {
+                        "high_value": "Indicates potential bot activity or manipulation.",
+                        "low_value": "Suggests organic trading behavior."
+                    }
+                },
+                {
+                    "name": "number_of_bots",
+                    "definition": "Number of bots trading the token.",
+                    "key_insights": {
+                        "high_value": "Signals automated trading and increased volatility.",
+                        "low_value": "Suggests organic trading activity, which is generally positive."
+                    }
+                },
+                {
+                    "name": "currently_held_percentage_of_bots",
+                    "definition": "Percentage of tokens held by bots.",
+                    "key_insights": {
+                        "high_value": "Indicates higher likelihood of price manipulation.",
+                        "low_value": "Suggests organic token distribution and reduced risk."
+                    }
+                },
+                {
+                    "name": "max_sol_spent_in_bundle",
+                    "definition": "Maximum SOL spent in a transaction bundle.",
+                    "key_insights": {
+                        "high_value": "Reflects significant trading activity, potentially by large holders or bots.",
+                        "low_value": "Indicates smaller, organic transactions."
+                    }
+                },
+                {
+                    "name": "bundle_max_unique_wallets",
+                    "definition": "Maximum unique wallets involved in a bundle.",
+                    "key_insights": {
+                        "high_value": "Reflects higher activity, possibly from coordinated trading or bots.",
+                        "low_value": "Indicates isolated or organic activity."
+                    }
+                },
+                {
+                    "name": "bundle_max_percent_held",
+                    "definition": "Maximum percentage of tokens held by a single wallet in a bundle.",
+                    "key_insights": {
+                        "high_value": "Suggests centralized holdings and potential manipulation.",
+                        "low_value": "Indicates more distributed token ownership."
+                    }
+                },
+                {
+                    "name": "bundle_wallet_holdings_percentage",
+                    "definition": "Percentage of tokens held in bundles.",
+                    "key_insights": {
+                        "high_value": "May indicate manipulative behavior or centralized holdings.",
+                        "low_value": "Suggests organic token holding patterns."
+                    }
+                },
+                {
+                    "name": "raydium_holders_percentage",
+                    "definition": "Percentage of holders that have no trades on Pumpfun pre-listing on Raydium. These are wallets that most likely received tokens via transfers from other wallets that bought on Pumpfun.",
+                    "key_insights": {
+                        "high_value": "Indicates potential risk that manipulators may have tried to obscure their holdings by distributing tokens across many wallets. This might suggest suspicious activity.",
+                        "low_value": "Suggests stronger distribution among original holders, which is typically a more organic and less risky distribution pattern."
+                    }
+                },
+                {
+                    "name": "og_holders_percentage",
+                    "definition": "Percentage of holders who obtained the token pre-listing.",
+                    "key_insights": {
+                        "high_value": "Indicates strong early interest, which can be a positive signal. However, it also increases the risk of pre-listing dumps, as early holders may cash out quickly.",
+                        "low_value": "Suggests that most holders came post-listing or tokens were transferred to them, which might indicate better long-term stability but less initial enthusiasm."
+                    }
+                },
+                {
+                    "name": "pumpfun_unique_traders",
+                    "definition": "Number of unique traders identified from Pumpfun before the token was listed.",
+                    "key_insights": {
+                        "high_value": "Indicates early interest and potential demand but could indicate bot activity and potential manipulation.",
+                        "low_value": "Suggests lower pre-listing activity or interest."
+                    }
+                },
+                {
+                    "name": "pumpfun_top_10_holders_percentage",
+                    "definition": "Percentage of tokens held by the top 10 Pumpfun traders.",
+                    "key_insights": {
+                        "high_value": "Centralized pre-listing activity, increasing risk of manipulation.",
+                        "low_value": "Indicates a more decentralized holder base."
+                    }
+                },
+                {
+                    "name": "pumpfun_total_transactions",
+                    "definition": "Total number of transactions on Pumpfun before the token was listed.",
+                    "key_insights": {
+                        "high_value": "Suggests high pre-listing activity, possibly indicating demand, but could indicate potential scam.",
+                        "low_value": "Suggests lower interest before listing."
+                    }
+                },
+                {
+                    "name": "pumpfun_reply_count",
+                    "definition": "Number of replies to the token on Pumpfun.",
+                    "key_insights": {
+                        "high_value": "Could indicate hype or spam/scam attempts.",
+                        "low_value": "Suggests less public interest."
+                    }
+                },
+                {
+                    "name": "pumpfun_total_volume_sol",
+                    "definition": "Total trading volume (in SOL) on Pumpfun before the token was listed.",
+                    "key_insights": {
+                        "high_value": "Indicates significant early trading activity and demand.",
+                        "low_value": "Suggests lower trading interest before listing."
+                    }
+                },
+                {
+                    "name": "dev_wallet_buy_volume",
+                    "definition": "Volume of tokens bought by developer wallets.",
+                    "key_insights": {
+                        "high_value": "Indicates developers are confident in the token."
+                    }
+                },
+                {
+                    "name": "dev_wallet_sell_volume",
+                    "definition": "Volume of tokens sold by developer wallets.",
+                    "key_insights": {
+                        "high_value": "Warning sign of a potential rug pull."
+                    }
+                },
+                {
+                    "name": "dev_wallet_buy_count",
+                    "definition": "Number of buy transactions by developer wallets.",
+                    "key_insights": {
+                        "high_value": "Positive signal of developer confidence."
+                    }
+                },
+                {
+                    "name": "dev_wallet_sell_count",
+                    "definition": "Number of sell transactions by developer wallets.",
+                    "key_insights": {
+                        "high_value": "Negative signal of potential developer exit."
+                    }
+                },
+                {
+                    "name": "dev_wallet_flag",
+                    "definition": "Category of the developer wallet.",
+                    "key_insights": {
+                        "new": "Wallet created within the last 24 hours; raises suspicion of manipulation.",
+                        "hft": "High-frequency trading wallet; raises suspicion of manipulation.",
+                        "neutral": "Normal wallet; generally safer."
+                    }
+                },
+                {
+                    "name": "pumpfun_neutral_count",
+                    "definition": "Count of neutral wallets involved in the token pre-listing.",
+                    "key_insights": {
+                        "high_value": "Indicates organic pre-listing activity."
+                    }
+                },
+                {
+                    "name": "pumpfun_hft_count",
+                    "definition": "Count of high-frequency trading (HFT) wallets involved in the token pre-listing.",
+                    "key_insights": {
+                        "high_value": "Increases risk of manipulation."
+                    }
+                },
+                {
+                    "name": "pumpfun_new_count",
+                    "definition": "Count of new wallets involved in the token pre-listing.",
+                    "key_insights": {
+                        "high_value": "Increases risk of manipulation."
+                    }
+                },
+                {
+                    "name": "pumpfun_neutral_holdings_percentage",
+                    "definition": "Percentage of holdings by neutral wallets.",
+                    "key_insights": {
+                        "high_value": "Suggests healthier token distribution."
+                    }
+                },
+                {
+                    "name": "pumpfun_hft_holdings_percentage",
+                    "definition": "Percentage of holdings by high-frequency trading (HFT) wallets.",
+                    "key_insights": {
+                        "high_value": "Increases risk of dump or manipulation."
+                    }
+                },
+                {
+                    "name": "pumpfun_new_holdings_percentage",
+                    "definition": "Percentage of holdings by new wallets.",
+                    "key_insights": {
+                        "high_value": "Increases risk of dump or manipulation."
+                    }
+                },
+                {
+                    "name": "wallet_bundle_total_holdings_percentage",
+                    "definition": "Percentage of token supply held in all wallet bundles.",
+                    "key_insights": {
+                        "high_value": "Indicates centralization and higher risk.",
+                        "low_value": "Reflects a more decentralized token base."
+                    }
+                }
+            ],
+            "how_features_work_together": [
+                "Centralization Risks: High values in top_10_percentage, dev_token_percentage, and bundle_wallet_holdings_percentage can signal manipulation risk.",
+                "Hype vs. Organic Growth: Features like pumpfun_reply_count and pumpfun_total_transactions may indicate hype but need to be balanced with organic activity (unique_holders, pumpfun_neutral_count).",
+                "Scam Indicators: dev_wallet_flag, name_similarity, and symbol_similarity are key indicators for spotting scams.",
+                "We limit pumpfun_total_transactions because if there is too much transactions there is high probability transactions are mainly made by bots, artificially pumped that the coin has more volume and looks more legit.",
+                "If number hours_since_inception is low, it means we will find more bundles, but this could also indicate high demand or bot activity depending on other feature values."
+            ]
+        }`
+    ]
 };

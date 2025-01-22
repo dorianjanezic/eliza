@@ -579,7 +579,6 @@ export class MessageManager {
                 this.runtime.character.templates?.shouldRespondTemplate ||
                 discordShouldRespondTemplate,
         });
-
         const response = await generateShouldRespond({
             runtime: this.runtime,
             context: shouldRespondContext,

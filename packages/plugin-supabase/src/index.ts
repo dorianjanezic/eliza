@@ -9,7 +9,7 @@ import type { TokenUpdate, ProcessedTokenAnalysis, TokenProcessingResult } from 
 export {
     TokenUpdateClient,
     SupabaseClientWrapper,
-    TokenProcessingClient,
+    // TokenProcessingClient,
     TokenUpdate,
     ProcessedTokenAnalysis,
     TokenProcessingResult,

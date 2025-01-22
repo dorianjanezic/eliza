@@ -3,16 +3,19 @@ import { EventEmitter } from 'events';
 import { TokenUpdate } from '../types';
 import { TokenProcessingClient } from './tokenProcessingClient';
 import { elizaLogger } from '@ai16z/eliza';
+import { stringToUuid } from '@ai16z/eliza';
 
 export class TokenUpdateClient extends EventEmitter {
     private ws: WebSocket | null = null;
     private heartbeatInterval: NodeJS.Timeout | null = null;
     private reconnectTimeout: NodeJS.Timeout | null = null;
     private isConnected: boolean = false;
+    private processedTokens: Set<string> = new Set();
 
     constructor(
         private url: string,
-        private apiKey: string
+        private apiKey: string,
+        private runtime: any
     ) {
         super();
     }
@@ -60,14 +63,12 @@ export class TokenUpdateClient extends EventEmitter {
 
         this.ws.onopen = () => {
             this.isConnected = true;
-            elizaLogger.info('Connected to Supabase WebSocket');
             elizaLogger.debug('WebSocket state:', this.ws?.readyState);
             this.setupHeartbeat();
             this.subscribeToUpdates();
         };
 
-        this.ws.onmessage = (event) => {
-            elizaLogger.debug('WebSocket message received:', event.data.toString());
+        this.ws.onmessage = async (event) => {
             try {
                 const data = JSON.parse(event.data.toString());
 
@@ -79,26 +80,27 @@ export class TokenUpdateClient extends EventEmitter {
                         return;
                     }
 
-                    elizaLogger.info('Received database change:', {
-                        type: change.type,
-                        table: change.table,
-                        schema: change.schema,
-                        processing_stage: change.record?.processing_stage
-                    });
-
                     if (change.type === 'UPDATE' && change.record?.processing_stage === 'completed') {
+                        const tokenId = change.record.token_id;
+
+                        // Skip if we've already processed this token recently
+                        if (this.processedTokens.has(tokenId)) {
+                            elizaLogger.info(`Skipping duplicate update for token ${tokenId}`);
+                            return;
+                        }
+
                         const tokenUpdate: TokenUpdate = {
                             record: change.record,
                             oldRecord: change.old_record,
                             timestamp: change.commit_timestamp
                         };
 
-                        elizaLogger.info('Emitting token update:', {
-                            tokenId: change.record.id,
-                            stage: change.record.processing_stage,
-                            record: change.record
-                        });
+                        this.processedTokens.add(tokenId);
 
+                        // Clear the processed token after some time
+                        // setTimeout(() => {
+                        //     this.processedTokens.delete(tokenId);
+                        // }, 5000); // 5 second cooldown
                         this.emit('tokenUpdate', tokenUpdate);
                     }
                 }
@@ -113,7 +115,6 @@ export class TokenUpdateClient extends EventEmitter {
         this.ws.onclose = () => {
             this.isConnected = false;
             this.clearHeartbeat();
-            elizaLogger.warn('Supabase connection closed, attempting to reconnect...');
 
             // Implement exponential backoff
             const reconnectDelay = 5000;
@@ -150,7 +151,8 @@ export class TokenUpdateClient extends EventEmitter {
 
         try {
             this.ws.send(JSON.stringify(subscription));
-            elizaLogger.info('Subscribed to token updates');
+            elizaLogger.success('Successfully subscribed to updates');
+
         } catch (error) {
             elizaLogger.error('Failed to subscribe to updates:', error);
         }
@@ -185,12 +187,13 @@ export class SupabaseClientWrapper {
 
         this.client = new TokenUpdateClient(
             process.env.SUPABASE_URL,
-            process.env.SUPABASE_ANON_KEY
+            process.env.SUPABASE_ANON_KEY,
+            runtime
         );
 
         this.client.on('tokenUpdate', async (update: TokenUpdate) => {
             elizaLogger.info('Token update received:', {
-                tokenId: update.record.id,
+                tokenId: update.record.token_id,
                 timestamp: update.timestamp
             });
 

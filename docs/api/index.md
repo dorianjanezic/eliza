@@ -41,6 +41,7 @@
 - [Account](interfaces/Account.md)
 - [Participant](interfaces/Participant.md)
 - [Room](interfaces/Room.md)
+- [Character](interfaces/Character.md)
 - [IDatabaseAdapter](interfaces/IDatabaseAdapter.md)
 - [IDatabaseCacheAdapter](interfaces/IDatabaseCacheAdapter.md)
 - [IMemoryManager](interfaces/IMemoryManager.md)
@@ -53,6 +54,7 @@
 - [IBrowserService](interfaces/IBrowserService.md)
 - [ISpeechService](interfaces/ISpeechService.md)
 - [IPdfService](interfaces/IPdfService.md)
+- [ActionResponse](interfaces/ActionResponse.md)
 
 ## Type Aliases
 
@@ -67,7 +69,6 @@
 - [Media](type-aliases/Media.md)
 - [Client](type-aliases/Client.md)
 - [Plugin](type-aliases/Plugin.md)
-- [Character](type-aliases/Character.md)
 - [CacheOptions](type-aliases/CacheOptions.md)
 - [SearchResult](type-aliases/SearchResult.md)
 - [SearchResponse](type-aliases/SearchResponse.md)
@@ -86,6 +87,7 @@
 - [shouldRespondFooter](variables/shouldRespondFooter.md)
 - [booleanFooter](variables/booleanFooter.md)
 - [stringArrayFooter](variables/stringArrayFooter.md)
+- [postActionResponseFooter](variables/postActionResponseFooter.md)
 - [settings](variables/settings.md)
 
 ## Functions
@@ -119,6 +121,7 @@
 - [generateWebSearch](functions/generateWebSearch.md)
 - [generateObjectV2](functions/generateObjectV2.md)
 - [handleProvider](functions/handleProvider.md)
+- [generateTweetActions](functions/generateTweetActions.md)
 - [getGoals](functions/getGoals.md)
 - [formatGoalsAsString](functions/formatGoalsAsString.md)
 - [updateGoal](functions/updateGoal.md)
@@ -133,6 +136,7 @@
 - [parseBooleanFromText](functions/parseBooleanFromText.md)
 - [parseJsonArrayFromText](functions/parseJsonArrayFromText.md)
 - [parseJSONObjectFromText](functions/parseJSONObjectFromText.md)
+- [parseActionResponseFromText](functions/parseActionResponseFromText.md)
 - [formatPosts](functions/formatPosts.md)
 - [getProviders](functions/getProviders.md)
 - [createRelationship](functions/createRelationship.md)

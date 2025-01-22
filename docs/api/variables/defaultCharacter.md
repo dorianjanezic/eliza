@@ -2,8 +2,8 @@
 
 # Variable: defaultCharacter
 
-> `const` **defaultCharacter**: [`Character`](../type-aliases/Character.md)
+> `const` **defaultCharacter**: [`Character`](../interfaces/Character.md)
 
 ## Defined in
 
-[packages/core/src/defaultCharacter.ts:3](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/defaultCharacter.ts#L3)
+[packages/core/src/defaultCharacter.ts:4](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/defaultCharacter.ts#L4)

@@ -14,4 +14,4 @@
 
 ## Defined in
 
-[packages/core/src/parsing.ts:13](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/parsing.ts#L13)
+[packages/core/src/parsing.ts:15](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/parsing.ts#L15)
