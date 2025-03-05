@@ -54,7 +54,7 @@ export const models: Models = {
         model: {
             [ModelClass.SMALL]: "claude-3-haiku-20240307",
             [ModelClass.MEDIUM]: "claude-3-5-sonnet-20241022",
-            [ModelClass.LARGE]: "claude-3-5-sonnet-20241022",
+            [ModelClass.LARGE]: "claude-3-7-sonnet-20250219",
         },
     },
     [ModelProviderName.CLAUDE_VERTEX]: {

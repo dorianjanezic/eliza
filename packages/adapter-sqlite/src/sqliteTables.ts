@@ -92,11 +92,14 @@ CREATE TABLE IF NOT EXISTS "cache" (
     PRIMARY KEY ("key", "agentId")
 );
 
--- Table: processed_tokens
-CREATE TABLE IF NOT EXISTS "processed_tokens" (
-    "token_id" TEXT PRIMARY KEY,
-    "processed_at" TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    "status" TEXT DEFAULT 'completed'
+-- Table: tokens
+CREATE TABLE IF NOT EXISTS tokens (
+    id TEXT PRIMARY KEY,
+    token TEXT UNIQUE NOT NULL,
+    metadata TEXT,
+    processedAt INTEGER NOT NULL,
+    agentId TEXT NOT NULL,
+    FOREIGN KEY(agentId) REFERENCES accounts(id)
 );
 
 -- Index: relationships_id_key
@@ -107,5 +110,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS "memories_id_key" ON "memories" ("id");
 
 -- Index: participants_id_key
 CREATE UNIQUE INDEX IF NOT EXISTS "participants_id_key" ON "participants" ("id");
+
+-- Index: tokens_token
+CREATE INDEX IF NOT EXISTS idx_tokens_token ON tokens(token);
+
+-- Index: tokens_agent
+CREATE INDEX IF NOT EXISTS idx_tokens_agent ON tokens(agentId);
 
 COMMIT;`;

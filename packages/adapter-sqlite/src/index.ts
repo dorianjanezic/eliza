@@ -17,6 +17,10 @@ import { v4 } from "uuid";
 import { load } from "./sqlite_vec.ts";
 import { sqliteTables } from "./sqliteTables.ts";
 
+export interface TokenMetadata {
+    [key: string]: unknown;
+}
+
 export class SqliteDatabaseAdapter
     extends DatabaseAdapter<Database>
     implements IDatabaseCacheAdapter
@@ -248,8 +252,8 @@ export class SqliteDatabaseAdapter
 
         let sql = `
             SELECT *, vec_distance_L2(embedding, ?) AS similarity
-            FROM memories 
-            WHERE type = ? 
+            FROM memories
+            WHERE type = ?
             AND roomId = ?`;
 
         if (params.unique) {
@@ -340,24 +344,24 @@ export class SqliteDatabaseAdapter
         // First get content text and calculate Levenshtein distance
         const sql = `
             WITH content_text AS (
-                SELECT 
+                SELECT
                     embedding,
                     json_extract(
                         json(content),
                         '$.' || ? || '.' || ?
                     ) as content_text
-                FROM memories 
+                FROM memories
                 WHERE type = ?
                 AND json_extract(
                     json(content),
                     '$.' || ? || '.' || ?
                 ) IS NOT NULL
             )
-            SELECT 
+            SELECT
                 embedding,
                 length(?) + length(content_text) - (
                     length(?) + length(content_text) - (
-                        length(replace(lower(?), lower(content_text), '')) + 
+                        length(replace(lower(?), lower(content_text), '')) +
                         length(replace(lower(content_text), lower(?), ''))
                     ) / 2
                 ) as levenshtein_score
@@ -706,5 +710,63 @@ export class SqliteDatabaseAdapter
             console.log("Error removing cache", error);
             return false;
         }
+    }
+
+    async storeProcessedToken(
+        token: string,
+        metadata: TokenMetadata,
+        agentId: UUID
+    ): Promise<void> {
+        const sql = `
+            INSERT OR REPLACE INTO tokens (id, token, metadata, processedAt, agentId)
+            VALUES (?, ?, ?, ?, ?)
+        `;
+
+        this.db.prepare(sql).run(
+            v4(),
+            token,
+            JSON.stringify(metadata),
+            Date.now(),
+            agentId
+        );
+    }
+
+    async isTokenProcessed(token: string, agentId: UUID): Promise<boolean> {
+        const sql = `
+            SELECT 1 FROM tokens
+            WHERE token = ? AND agentId = ?
+            LIMIT 1
+        `;
+
+        const result = this.db.prepare(sql).get(token, agentId);
+        return result !== undefined;
+    }
+
+    async getTokenMetadata(
+        token: string,
+        agentId: UUID
+    ): Promise<TokenMetadata | null> {
+        const sql = `
+            SELECT metadata FROM tokens
+            WHERE token = ? AND agentId = ?
+            LIMIT 1
+        `;
+
+        const result = this.db.prepare(sql).get(token, agentId) as
+            | { metadata: string }
+            | undefined;
+
+        if (!result) return null;
+
+        return JSON.parse(result.metadata);
+    }
+
+    async removeProcessedToken(token: string, agentId: UUID): Promise<void> {
+        const sql = `
+            DELETE FROM tokens
+            WHERE token = ? AND agentId = ?
+        `;
+
+        this.db.prepare(sql).run(token, agentId);
     }
 }

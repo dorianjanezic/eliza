@@ -143,6 +143,8 @@ export class AgentRuntime implements IAgentRuntime {
     memoryManagers: Map<string, IMemoryManager> = new Map();
     cacheManager: ICacheManager;
 
+    scheduledTasks: Map<string, NodeJS.Timeout> | null = null;
+
     registerMemoryManager(manager: IMemoryManager): void {
         if (!manager.tableName) {
             throw new Error("Memory manager must have a tableName");
@@ -1249,6 +1251,56 @@ Text: ${attachment.text}
             recentMessagesData,
             attachments: formattedAttachments,
         } as State;
+    }
+
+    /**
+     * Schedule a task to be executed at a specific time
+     */
+    async scheduleTask(task: {
+        taskId: string;
+        executeAt: Date;
+        task: () => Promise<void>;
+    }): Promise<void> {
+        const delay = task.executeAt.getTime() - Date.now();
+
+        elizaLogger.info(`Scheduling task ${task.taskId}:`, {
+            executeAt: task.executeAt.toISOString(),
+            delay: `${delay / 1000}s`
+        });
+
+        if (delay <= 0) {
+            elizaLogger.info(`Executing task ${task.taskId} immediately`);
+            try {
+                await task.task();
+            } catch (error) {
+                elizaLogger.error(`Error executing immediate task ${task.taskId}:`, error);
+                throw error;
+            }
+            return;
+        }
+
+        // Use Promise to allow proper async handling and cleanup
+        return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(async () => {
+                try {
+                    elizaLogger.info(`Executing scheduled task ${task.taskId}`);
+                    await task.task();
+                    resolve();
+                } catch (error) {
+                    elizaLogger.error(`Error executing scheduled task ${task.taskId}:`, error);
+                    reject(error);
+                } finally {
+                    // Clean up the task reference
+                    this.scheduledTasks?.delete(task.taskId);
+                }
+            }, delay);
+
+            // Store the timeout ID to allow cancellation if needed
+            this.scheduledTasks = this.scheduledTasks || new Map();
+            this.scheduledTasks.set(task.taskId, timeoutId);
+
+            elizaLogger.success(`Task ${task.taskId} scheduled for execution in ${delay / 1000}s`);
+        });
     }
 }
 

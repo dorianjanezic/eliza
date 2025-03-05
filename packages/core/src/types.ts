@@ -885,6 +885,11 @@ export interface IDatabaseAdapter {
     }): Promise<Relationship | null>;
 
     getRelationships(params: { userId: UUID }): Promise<Relationship[]>;
+
+    isTokenProcessed(token: string, agentId: UUID): Promise<boolean>;
+    storeProcessedToken(token: string, metadata: any, agentId: UUID): Promise<void>;
+    getTokenMetadata(token: string, agentId: UUID): Promise<any | null>;
+    removeProcessedToken(token: string, agentId: UUID): Promise<void>;
 }
 
 export interface IDatabaseCacheAdapter {
@@ -1055,6 +1060,15 @@ export interface IAgentRuntime {
     ): Promise<State>;
 
     updateRecentMessageState(state: State): Promise<State>;
+
+    /**
+     * Schedule a task to be executed at a specific time
+     */
+    scheduleTask(task: {
+        taskId: string;
+        executeAt: Date;
+        task: () => Promise<void>;
+    }): Promise<void>;
 }
 
 export interface IImageDescriptionService extends Service {

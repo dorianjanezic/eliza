@@ -4,7 +4,7 @@ import { Character, ModelProviderName, Clients } from "./types.ts";
 export const defaultCharacter: Character = {
     name: "komorebi",
     plugins: [],
-    clients: [Clients.TWITTER],
+    clients: [],
     modelProvider: ModelProviderName.ANTHROPIC,
   settings: {
         secrets: {
@@ -15433,6 +15433,7 @@ export const defaultCharacter: Character = {
         ]
     },
     knowledge:[
+
         // PNL Understanding & Calculation
         "PNL (Profit and Loss) represents the multiple of initial investment: 1x is break-even, 2x is 100% profit, -0.5x is 50% loss",
         "PNL Calculation: (Final Value - Initial Value) / Initial Value. Example: 3x means $1 became $4 (300% profit)",
@@ -15444,14 +15445,6 @@ export const defaultCharacter: Character = {
         "Time to achieve maximum PNL varied: some peaked within hours, others took days",
         "PNL calculation considers final settled price, not temporary price spikes",
         "Negative PNL approaching -1.0 typically indicates token death or abandonment",
-
-        // Dataset Description
-        "Dataset contains 45 token samples: 15 highly profitable (84x-334x PNL), 15 neutral (-0.29x to -0.23x PNL), and 15 severe losses (-1.75x to -1.12x PNL)",
-        "Data represents tokens bonded on pump.fun platform with performance tracked post-bonding",
-        "Each token's metrics captured at initial bonding including market cap, holder distribution, bot activity, and developer behavior",
-        "PNL range in dataset: Best performing +333.869x, Worst performing -1.750x",
-        "Market cap range: Lowest $9,198 to Highest $3,938,766",
-        "Time period: Tokens aged from minutes to 1,346 hours (56 days) since inception",
 
         // Analysis Insights
         "Tokens with market caps between $20,000-$200,000 had the highest success rate for positive PNL",
@@ -15475,277 +15468,72 @@ export const defaultCharacter: Character = {
         "Market cap below $100,000 with 300-500 holders suggests organic growth",
         "High initial market cap ($500,000+) combined with low holder count (<200) indicates potential manipulation",
 
-        // Dataset Metrics Coverage
-        "Metrics tracked: PNL, Market Cap, Unique Holders, Bot Percentage, Top 10 Holdings, Dev Token Percentage, Dev Trading Volume, Age, Holder Type Distribution",
-        "All monetary values in USD, percentages normalized to 100%, time in hours",
-        "Bot metrics include percentage of supply held by identified bot wallets",
-        "Developer metrics include token holdings and trading activity in SOL",
-        "Holder distribution tracked across Raydium and OG (original) holders",
-        `{
-            "features": [
-                {
-                    "name": "unique_holders",
-                    "definition": "Number of unique wallets holding the token.",
-                    "key_insights": {
-                        "high_value": "Suggests widespread adoption, reducing likelihood of price manipulation.",
-                        "low_value": "Indicates concentrated holders, increasing risk of large dumps or manipulation."
-                    }
-                },
-                {
-                    "name": "market_cap",
-                    "definition": "Current market capitalization of the token.",
-                    "key_insights": {
-                        "high_value": "Reflects a larger, more established token with potentially lower risk but limited growth.",
-                        "low_value": "Indicates a smaller token with high growth potential but also higher risk of failure."
-                    }
-                },
-                {
-                    "name": "name_similarity",
-                    "definition": "Similarity of the token\u2019s name to previously existing tokens.",
-                    "key_insights": {
-                        "high_value": "Could indicate a scam or copycat token attempting to exploit a successful token.",
-                        "low_value": "Suggests a unique project, which is often positive but not always indicative of quality."
-                    }
-                },
-                {
-                    "name": "symbol_similarity",
-                    "definition": "Similarity of the token\u2019s symbol to existing tokens.",
-                    "key_insights": {
-                        "high_value": "Indicates potential scams or copycat tokens.",
-                        "low_value": "Suggests a unique symbol, which is generally positive."
-                    }
-                },
-                {
-                    "name": "hours_since_inception",
-                    "definition": "Time (in hours) since the token was created.",
-                    "key_insights": {
-                        "high_value": "Might indicate slower recognition or reduced manipulation risk.",
-                        "low_value": "Could mean rapid adoption (positive) or potential scam if artificially boosted."
-                    }
-                },
-                {
-                    "name": "top_10_percentage",
-                    "definition": "Percentage of tokens held by the top 10 holders.",
-                    "key_insights": {
-                        "high_value": "Indicates centralization, increasing risk of dumps and manipulation.",
-                        "low_value": "Suggests decentralized distribution and reduced manipulation risks."
-                    }
-                },
-                {
-                    "name": "dev_token_percentage",
-                    "definition": "Percentage of tokens held by developer wallets.",
-                    "key_insights": {
-                        "high_value": "Risk of rug pull if developers dump their tokens.",
-                        "low_value": "Indicates lower risk of developer-driven manipulation."
-                    }
-                },
-                {
-                    "name": "number_of_bundles",
-                    "definition": "Number of wallet bundles identified in transactions.",
-                    "key_insights": {
-                        "high_value": "Indicates potential bot activity or manipulation.",
-                        "low_value": "Suggests organic trading behavior."
-                    }
-                },
-                {
-                    "name": "number_of_bots",
-                    "definition": "Number of bots trading the token.",
-                    "key_insights": {
-                        "high_value": "Signals automated trading and increased volatility.",
-                        "low_value": "Suggests organic trading activity, which is generally positive."
-                    }
-                },
-                {
-                    "name": "currently_held_percentage_of_bots",
-                    "definition": "Percentage of tokens held by bots.",
-                    "key_insights": {
-                        "high_value": "Indicates higher likelihood of price manipulation.",
-                        "low_value": "Suggests organic token distribution and reduced risk."
-                    }
-                },
-                {
-                    "name": "max_sol_spent_in_bundle",
-                    "definition": "Maximum SOL spent in a transaction bundle.",
-                    "key_insights": {
-                        "high_value": "Reflects significant trading activity, potentially by large holders or bots.",
-                        "low_value": "Indicates smaller, organic transactions."
-                    }
-                },
-                {
-                    "name": "bundle_max_unique_wallets",
-                    "definition": "Maximum unique wallets involved in a bundle.",
-                    "key_insights": {
-                        "high_value": "Reflects higher activity, possibly from coordinated trading or bots.",
-                        "low_value": "Indicates isolated or organic activity."
-                    }
-                },
-                {
-                    "name": "bundle_max_percent_held",
-                    "definition": "Maximum percentage of tokens held by a single wallet in a bundle.",
-                    "key_insights": {
-                        "high_value": "Suggests centralized holdings and potential manipulation.",
-                        "low_value": "Indicates more distributed token ownership."
-                    }
-                },
-                {
-                    "name": "bundle_wallet_holdings_percentage",
-                    "definition": "Percentage of tokens held in bundles.",
-                    "key_insights": {
-                        "high_value": "May indicate manipulative behavior or centralized holdings.",
-                        "low_value": "Suggests organic token holding patterns."
-                    }
-                },
-                {
-                    "name": "raydium_holders_percentage",
-                    "definition": "Percentage of holders that have no trades on Pumpfun pre-listing on Raydium. These are wallets that most likely received tokens via transfers from other wallets that bought on Pumpfun.",
-                    "key_insights": {
-                        "high_value": "Indicates potential risk that manipulators may have tried to obscure their holdings by distributing tokens across many wallets. This might suggest suspicious activity.",
-                        "low_value": "Suggests stronger distribution among original holders, which is typically a more organic and less risky distribution pattern."
-                    }
-                },
-                {
-                    "name": "og_holders_percentage",
-                    "definition": "Percentage of holders who obtained the token pre-listing.",
-                    "key_insights": {
-                        "high_value": "Indicates strong early interest, which can be a positive signal. However, it also increases the risk of pre-listing dumps, as early holders may cash out quickly.",
-                        "low_value": "Suggests that most holders came post-listing or tokens were transferred to them, which might indicate better long-term stability but less initial enthusiasm."
-                    }
-                },
-                {
-                    "name": "pumpfun_unique_traders",
-                    "definition": "Number of unique traders identified from Pumpfun before the token was listed.",
-                    "key_insights": {
-                        "high_value": "Indicates early interest and potential demand but could indicate bot activity and potential manipulation.",
-                        "low_value": "Suggests lower pre-listing activity or interest."
-                    }
-                },
-                {
-                    "name": "pumpfun_top_10_holders_percentage",
-                    "definition": "Percentage of tokens held by the top 10 Pumpfun traders.",
-                    "key_insights": {
-                        "high_value": "Centralized pre-listing activity, increasing risk of manipulation.",
-                        "low_value": "Indicates a more decentralized holder base."
-                    }
-                },
-                {
-                    "name": "pumpfun_total_transactions",
-                    "definition": "Total number of transactions on Pumpfun before the token was listed.",
-                    "key_insights": {
-                        "high_value": "Suggests high pre-listing activity, possibly indicating demand, but could indicate potential scam.",
-                        "low_value": "Suggests lower interest before listing."
-                    }
-                },
-                {
-                    "name": "pumpfun_reply_count",
-                    "definition": "Number of replies to the token on Pumpfun.",
-                    "key_insights": {
-                        "high_value": "Could indicate hype or spam/scam attempts.",
-                        "low_value": "Suggests less public interest."
-                    }
-                },
-                {
-                    "name": "pumpfun_total_volume_sol",
-                    "definition": "Total trading volume (in SOL) on Pumpfun before the token was listed.",
-                    "key_insights": {
-                        "high_value": "Indicates significant early trading activity and demand.",
-                        "low_value": "Suggests lower trading interest before listing."
-                    }
-                },
-                {
-                    "name": "dev_wallet_buy_volume",
-                    "definition": "Volume of tokens bought by developer wallets.",
-                    "key_insights": {
-                        "high_value": "Indicates developers are confident in the token."
-                    }
-                },
-                {
-                    "name": "dev_wallet_sell_volume",
-                    "definition": "Volume of tokens sold by developer wallets.",
-                    "key_insights": {
-                        "high_value": "Warning sign of a potential rug pull."
-                    }
-                },
-                {
-                    "name": "dev_wallet_buy_count",
-                    "definition": "Number of buy transactions by developer wallets.",
-                    "key_insights": {
-                        "high_value": "Positive signal of developer confidence."
-                    }
-                },
-                {
-                    "name": "dev_wallet_sell_count",
-                    "definition": "Number of sell transactions by developer wallets.",
-                    "key_insights": {
-                        "high_value": "Negative signal of potential developer exit."
-                    }
-                },
-                {
-                    "name": "dev_wallet_flag",
-                    "definition": "Category of the developer wallet.",
-                    "key_insights": {
-                        "new": "Wallet created within the last 24 hours; raises suspicion of manipulation.",
-                        "hft": "High-frequency trading wallet; raises suspicion of manipulation.",
-                        "neutral": "Normal wallet; generally safer."
-                    }
-                },
-                {
-                    "name": "pumpfun_neutral_count",
-                    "definition": "Count of neutral wallets involved in the token pre-listing.",
-                    "key_insights": {
-                        "high_value": "Indicates organic pre-listing activity."
-                    }
-                },
-                {
-                    "name": "pumpfun_hft_count",
-                    "definition": "Count of high-frequency trading (HFT) wallets involved in the token pre-listing.",
-                    "key_insights": {
-                        "high_value": "Increases risk of manipulation."
-                    }
-                },
-                {
-                    "name": "pumpfun_new_count",
-                    "definition": "Count of new wallets involved in the token pre-listing.",
-                    "key_insights": {
-                        "high_value": "Increases risk of manipulation."
-                    }
-                },
-                {
-                    "name": "pumpfun_neutral_holdings_percentage",
-                    "definition": "Percentage of holdings by neutral wallets.",
-                    "key_insights": {
-                        "high_value": "Suggests healthier token distribution."
-                    }
-                },
-                {
-                    "name": "pumpfun_hft_holdings_percentage",
-                    "definition": "Percentage of holdings by high-frequency trading (HFT) wallets.",
-                    "key_insights": {
-                        "high_value": "Increases risk of dump or manipulation."
-                    }
-                },
-                {
-                    "name": "pumpfun_new_holdings_percentage",
-                    "definition": "Percentage of holdings by new wallets.",
-                    "key_insights": {
-                        "high_value": "Increases risk of dump or manipulation."
-                    }
-                },
-                {
-                    "name": "wallet_bundle_total_holdings_percentage",
-                    "definition": "Percentage of token supply held in all wallet bundles.",
-                    "key_insights": {
-                        "high_value": "Indicates centralization and higher risk.",
-                        "low_value": "Reflects a more decentralized token base."
-                    }
-                }
-            ],
-            "how_features_work_together": [
-                "Centralization Risks: High values in top_10_percentage, dev_token_percentage, and bundle_wallet_holdings_percentage can signal manipulation risk.",
-                "Hype vs. Organic Growth: Features like pumpfun_reply_count and pumpfun_total_transactions may indicate hype but need to be balanced with organic activity (unique_holders, pumpfun_neutral_count).",
-                "Scam Indicators: dev_wallet_flag, name_similarity, and symbol_similarity are key indicators for spotting scams.",
-                "We limit pumpfun_total_transactions because if there is too much transactions there is high probability transactions are mainly made by bots, artificially pumped that the coin has more volume and looks more legit.",
-                "If number hours_since_inception is low, it means we will find more bundles, but this could also indicate high demand or bot activity depending on other feature values."
-            ]
-        }`
-    ]
-};
+        // Features
+        "Unique holders description: Number of unique wallets holding the token. A high value suggests widespread adoption and reduces likelihood of price manipulation, while a low value indicates concentrated holders and increases risk of large dumps or manipulation.",
+        "Market cap description: Current market capitalization of the token. A high value reflects a larger, more established token with potentially lower risk but limited growth, while a low value indicates a smaller token with high growth potential but also higher risk of failure.",
+        "Name similarity description: Similarity of the token's name to previously existing tokens. A high value could indicate a scam or copycat token attempting to exploit a successful token, while a low value suggests a unique project, which is often positive but not always indicative of quality.",
+        "Symbol similarity description: Similarity of the token's symbol to existing tokens. A high value indicates potential scams or copycat tokens, while a low value suggests a unique symbol, which is generally positive.",
+        "Hours since inception description: Time (in hours) since the token was created. A high value might indicate slower recognition or reduced manipulation risk, while a low value could mean rapid adoption (positive) or potential scam if artificially boosted.",
+        "Top 10 percentage description: Percentage of tokens held by the top 10 holders. A high value indicates centralization, increasing risk of dumps and manipulation, while a low value suggests decentralized distribution and reduced manipulation risks.",
+        "Dev token percentage description: Percentage of tokens held by developer wallets. A high value indicates risk of rug pull if developers dump their tokens, while a low value indicates lower risk of developer-driven manipulation.",
+        "Number of bundles description: Number of wallet bundles identified in transactions. A high value indicates potential bot activity or manipulation, while a low value suggests organic trading behavior.",
+        "Number of bots description: Number of bots trading the token. A high value signals automated trading and increased volatility, while a low value suggests organic trading activity, which is generally positive.",
+        "Currently held percentage of bots description: Percentage of tokens held by bots. A high value indicates higher likelihood of price manipulation, while a low value suggests organic token distribution and reduced risk.",
+        "Max SOL spent in bundle description: Maximum SOL spent in a transaction bundle. A high value reflects significant trading activity, potentially by large holders or bots, while a low value indicates smaller, organic transactions.",
+        "Bundle max unique wallets description: Maximum unique wallets involved in a bundle. A high value reflects higher activity, possibly from coordinated trading or bots, while a low value indicates isolated or organic activity.",
+        "Bundle max percent held description: Maximum percentage of tokens held by a single wallet in a bundle. A high value suggests centralized holdings and potential manipulation, while a low value indicates more distributed token ownership.",
+        "Bundle wallet holdings percentage description: Percentage of tokens held in bundles. A high value may indicate manipulative behavior or centralized holdings, while a low value suggests organic token holding patterns.",
+        "Raydium holders percentage description: Percentage of holders that have no trades on Pumpfun pre-listing on Raydium. A high value indicates potential risk that manipulators may have tried to obscure their holdings by distributing tokens across many wallets, while a low value suggests stronger distribution among original holders.",
+        "OG holders percentage description: Percentage of holders who obtained the token pre-listing. A high value indicates strong early interest but increases risk of pre-listing dumps, while a low value suggests most holders came post-listing or tokens were transferred to them.",
+        "Pumpfun unique traders description: Number of unique traders identified from Pumpfun before the token was listed. A high value indicates early interest and potential demand but could indicate bot activity, while a low value suggests lower pre-listing activity or interest.",
+        "Pumpfun top 10 holders percentage description: Percentage of tokens held by the top 10 Pumpfun traders. A high value indicates centralized pre-listing activity and increased manipulation risk, while a low value indicates a more decentralized holder base.",
+        "Pumpfun total transactions description: Total number of transactions on Pumpfun before listing. A high value suggests high pre-listing activity but could indicate potential scam, while a low value suggests lower interest before listing.",
+        "Pumpfun reply count description: Number of replies to the token on Pumpfun. A high value could indicate hype or spam/scam attempts, while a low value suggests less public interest.",
+        "Pumpfun total volume SOL description: Total trading volume (in SOL) on Pumpfun before listing. A high value indicates significant early trading activity and demand, while a low value suggests lower trading interest before listing.",
+        "Dev wallet buy volume description: Volume of tokens bought by developer wallets. A high value indicates developers are confident in the token.",
+        "Dev wallet sell volume description: Volume of tokens sold by developer wallets. A high value is a warning sign of a potential rug pull.",
+        "Dev wallet buy count description: Number of buy transactions by developer wallets. A high value is a positive signal of developer confidence.",
+        "Dev wallet sell count description: Number of sell transactions by developer wallets. A high value is a negative signal of potential developer exit.",
+        "Dev wallet flag description: Category of the developer wallet. New wallets created within 24 hours raise suspicion of manipulation, HFT wallets raise suspicion of manipulation, while neutral wallets are generally safer.",
+        "Pumpfun neutral count description: Count of neutral wallets involved in the token pre-listing. A high value indicates organic pre-listing activity.",
+        "Pumpfun HFT count description: Count of high-frequency trading (HFT) wallets involved in the token pre-listing. A high value increases risk of manipulation.",
+        "Pumpfun new count description: Count of new wallets involved in the token pre-listing. A high value increases risk of manipulation.",
+        "Pumpfun neutral holdings percentage description: Percentage of holdings by neutral wallets. A high value suggests healthier token distribution.",
+        "Pumpfun HFT holdings percentage description: Percentage of holdings by high-frequency trading (HFT) wallets. A high value increases risk of dump or manipulation.",
+        "Pumpfun new holdings percentage description: Percentage of holdings by new wallets. A high value increases risk of dump or manipulation.",
+        "Wallet bundle total holdings percentage description: Percentage of token supply held in all wallet bundles. A high value indicates centralization and higher risk, while a low value reflects a more decentralized token base.",
+
+        // Positive Pnl tokens
+        "HISTORICAL_OUTCOME: Token achieved PnL of 333.8686 | INITIAL_CONDITIONS: unique_holders: 344, market_cap: 176662, name_similarity: 0.8000, symbol_similarity: 0.8000, hours_since_inception: 55.1970, top_10_percentage: 41.1200, dev_token_percentage: 1.7590, number_of_bundles: 17, number_of_bots: 6, currently_held_percentage_of_bots: 12.8555, max_sol_spent_in_bundle: 27.5622, bundle_max_unique_wallets: 11, bundle_max_percent_held: 14.1091, bundle_wallet_holdings_percentage: 26.5376, pumpfun_unique_traders: 122, pumpfun_top_10_holders_percentage: 53.2446, pumpfun_total_transactions: 200, pumpfun_reply_count: 26, pumpfun_total_volume_sol: 168.8587, dev_wallet_buy_volume: 0.5000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 70, pumpfun_hft_count: 22, pumpfun_new_count: 8, pumpfun_neutral_holdings_percentage: 60.4380, pumpfun_hft_holdings_percentage: 8.9370, pumpfun_new_holdings_percentage: 29.2170, wallet_bundle_total_holdings_percentage: 22.3594, raydium_holders_percentage: 35.7460, og_holders_percentage: 64.2536",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 288.8671 | INITIAL_CONDITIONS: unique_holders: 350, market_cap: 80833, name_similarity: 0.4615, symbol_similarity: 0.4615, hours_since_inception: 11.9562, top_10_percentage: 23.1400, dev_token_percentage: 0, number_of_bundles: 28, number_of_bots: 12, currently_held_percentage_of_bots: 15.4638, max_sol_spent_in_bundle: 19.5617, bundle_max_unique_wallets: 13, bundle_max_percent_held: 6.4951, bundle_wallet_holdings_percentage: 36.0914, pumpfun_unique_traders: 198, pumpfun_top_10_holders_percentage: 41.0996, pumpfun_total_transactions: 974, pumpfun_reply_count: 17, pumpfun_total_volume_sol: 283.4465, dev_wallet_buy_volume: 1, dev_wallet_sell_volume: 1.2732, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: new, pumpfun_neutral_count: 79, pumpfun_hft_count: 12, pumpfun_new_count: 9, pumpfun_neutral_holdings_percentage: 67.9850, pumpfun_hft_holdings_percentage: 6.6300, pumpfun_new_holdings_percentage: 16.7760, wallet_bundle_total_holdings_percentage: 2.1495, raydium_holders_percentage: 54.1538, og_holders_percentage: 45.8462",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 258.3593 | INITIAL_CONDITIONS: unique_holders: 449, market_cap: 9198.3806, name_similarity: 0.5000, symbol_similarity: 0.5000, hours_since_inception: 0.0694, top_10_percentage: 18.7400, dev_token_percentage: 0, number_of_bundles: 1, number_of_bots: 0, currently_held_percentage_of_bots: 0, max_sol_spent_in_bundle: 85.0023, bundle_max_unique_wallets: 15, bundle_max_percent_held: 100, bundle_wallet_holdings_percentage: 100, pumpfun_unique_traders: 16, pumpfun_top_10_holders_percentage: 87.2915, pumpfun_total_transactions: 17, pumpfun_reply_count: 15, pumpfun_total_volume_sol: 85.2027, dev_wallet_buy_volume: 0, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 0, dev_wallet_sell_count: 0, dev_wallet_flag: null, pumpfun_neutral_count: 16, pumpfun_hft_count: 0, pumpfun_new_count: 0, pumpfun_neutral_holdings_percentage: 100, pumpfun_hft_holdings_percentage: 0, pumpfun_new_holdings_percentage: 0, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 84.1599, og_holders_percentage: 15.8401",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 222.4287 | INITIAL_CONDITIONS: unique_holders: 419, market_cap: 212789, name_similarity: 0.5333, symbol_similarity: 0.5000, hours_since_inception: 0.1814, top_10_percentage: 34.9000, dev_token_percentage: 3.2935, number_of_bundles: 10, number_of_bots: 2, currently_held_percentage_of_bots: 24.7712, max_sol_spent_in_bundle: 4.3006, bundle_max_unique_wallets: 9, bundle_max_percent_held: 2.5527, bundle_wallet_holdings_percentage: 12.2793, pumpfun_unique_traders: 115, pumpfun_top_10_holders_percentage: 59.1151, pumpfun_total_transactions: 192, pumpfun_reply_count: 10, pumpfun_total_volume_sol: 179.6171, dev_wallet_buy_volume: 0.9500, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 72, pumpfun_hft_count: 15, pumpfun_new_count: 13, pumpfun_neutral_holdings_percentage: 76.3790, pumpfun_hft_holdings_percentage: 2.9100, pumpfun_new_holdings_percentage: 20.0070, wallet_bundle_total_holdings_percentage: 3.9831, raydium_holders_percentage: 40.4066, og_holders_percentage: 59.5934",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 216.5537 | INITIAL_CONDITIONS: unique_holders: 164, market_cap: 72106, name_similarity: 0.6111, symbol_similarity: 0.8000, hours_since_inception: 16.4155, top_10_percentage: 29.6200, dev_token_percentage: 0, number_of_bundles: 22, number_of_bots: 6, currently_held_percentage_of_bots: 11.1384, max_sol_spent_in_bundle: 12.5318, bundle_max_unique_wallets: 12, bundle_max_percent_held: 7.6163, bundle_wallet_holdings_percentage: 29.0205, pumpfun_unique_traders: 184, pumpfun_top_10_holders_percentage: 40.9174, pumpfun_total_transactions: 320, pumpfun_reply_count: 30, pumpfun_total_volume_sol: 191.0716, dev_wallet_buy_volume: 1.7000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 69, pumpfun_hft_count: 21, pumpfun_new_count: 10, pumpfun_neutral_holdings_percentage: 67.5010, pumpfun_hft_holdings_percentage: 14.2030, pumpfun_new_holdings_percentage: 12.5270, wallet_bundle_total_holdings_percentage: 6.7369, raydium_holders_percentage: 30.9614, og_holders_percentage: 69.0278",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0484 | INITIAL_CONDITIONS: unique_holders: 291, market_cap: 88995, name_similarity: 0.6000, symbol_similarity: 0.6250, hours_since_inception: 0.4302, top_10_percentage: 10.3000, dev_token_percentage: 0.0161, number_of_bundles: 417, number_of_bots: 18, currently_held_percentage_of_bots: 82.6457, max_sol_spent_in_bundle: 41.5766, bundle_max_unique_wallets: 21, bundle_max_percent_held: 78.6401, bundle_wallet_holdings_percentage: 95.5490, pumpfun_unique_traders: 268, pumpfun_top_10_holders_percentage: 58.3389, pumpfun_total_transactions: 2876, pumpfun_reply_count: 48, pumpfun_total_volume_sol: 97.7471, dev_wallet_buy_volume: 1.0000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 27, pumpfun_hft_count: 65, pumpfun_new_count: 8, pumpfun_neutral_holdings_percentage: 80.8930, pumpfun_hft_holdings_percentage: 9.0010, pumpfun_new_holdings_percentage: 0.5900, wallet_bundle_total_holdings_percentage: 12.7319, raydium_holders_percentage: 23.6794, og_holders_percentage: 76.3206",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 18.4662 | INITIAL_CONDITIONS: unique_holders: 369, market_cap: 154550, name_similarity: 0.5000, symbol_similarity: 0.5714, hours_since_inception: 0.1530, top_10_percentage: 23.0100, dev_token_percentage: 3.4613, number_of_bundles: 39, number_of_bots: 6, currently_held_percentage_of_bots: 10.0577, max_sol_spent_in_bundle: 8.7240, bundle_max_unique_wallets: 12, bundle_max_percent_held: 4.8703, bundle_wallet_holdings_percentage: 46.0632, pumpfun_unique_traders: 218, pumpfun_top_10_holders_percentage: 29.6190, pumpfun_total_transactions: 364, pumpfun_reply_count: 94, pumpfun_total_volume_sol: 253.3473, dev_wallet_buy_volume: 1.0000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 74, pumpfun_hft_count: 8, pumpfun_new_count: 18, pumpfun_neutral_holdings_percentage: 60.5690, pumpfun_hft_holdings_percentage: 2.6350, pumpfun_new_holdings_percentage: 23.2670, wallet_bundle_total_holdings_percentage: 2.9764, raydium_holders_percentage: 37.6904, og_holders_percentage: 62.3096",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 5.0533 | INITIAL_CONDITIONS: unique_holders: 422, market_cap: 59672, name_similarity: 0.5714, symbol_similarity: 0.5714, hours_since_inception: 1.5571, top_10_percentage: 18.7500, dev_token_percentage: 0.8868, number_of_bundles: 59, number_of_bots: 8, currently_held_percentage_of_bots: 12.7502, max_sol_spent_in_bundle: 18.9519, bundle_max_unique_wallets: 10, bundle_max_percent_held: 4.9657, bundle_wallet_holdings_percentage: 49.3302, pumpfun_unique_traders: 361, pumpfun_top_10_holders_percentage: 32.4639, pumpfun_total_transactions: 675, pumpfun_reply_count: 74, pumpfun_total_volume_sol: 381.8670, dev_wallet_buy_volume: 0.2500, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 82, pumpfun_hft_count: 13, pumpfun_new_count: 6, pumpfun_neutral_holdings_percentage: 66.3760, pumpfun_hft_holdings_percentage: 4.3300, pumpfun_new_holdings_percentage: 2.4140, wallet_bundle_total_holdings_percentage: 5.6351, raydium_holders_percentage: 43.0642, og_holders_percentage: 56.9123",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 18.4662 | INITIAL_CONDITIONS: unique_holders: 369, market_cap: 154550, name_similarity: 0.5000, symbol_similarity: 0.5714, hours_since_inception: 0.1530, top_10_percentage: 23.0100, dev_token_percentage: 3.4613, number_of_bundles: 39, number_of_bots: 6, currently_held_percentage_of_bots: 10.0577, max_sol_spent_in_bundle: 8.7240, bundle_max_unique_wallets: 12, bundle_max_percent_held: 4.8703, bundle_wallet_holdings_percentage: 46.0632, pumpfun_unique_traders: 218, pumpfun_top_10_holders_percentage: 29.6190, pumpfun_total_transactions: 364, pumpfun_reply_count: 94, pumpfun_total_volume_sol: 253.3473, dev_wallet_buy_volume: 1.0000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 74, pumpfun_hft_count: 8, pumpfun_new_count: 18, pumpfun_neutral_holdings_percentage: 60.5690, pumpfun_hft_holdings_percentage: 2.6350, pumpfun_new_holdings_percentage: 23.2670, wallet_bundle_total_holdings_percentage: 2.9764, raydium_holders_percentage: 37.6904, og_holders_percentage: 62.3096",
+
+        // Break-Even Tokens (Near-Zero PnL Outcomes)
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0016 | INITIAL_CONDITIONS: unique_holders: 292, market_cap: 242184, name_similarity: 0.7143, symbol_similarity: 0.6154, hours_since_inception: 0.5790, top_10_percentage: 17.1300, dev_token_percentage: 0, number_of_bundles: 7, number_of_bots: 1, currently_held_percentage_of_bots: 0, max_sol_spent_in_bundle: 47.2346, bundle_max_unique_wallets: 34, bundle_max_percent_held: 47.9120, bundle_wallet_holdings_percentage: 92.5119, pumpfun_unique_traders: 79, pumpfun_top_10_holders_percentage: 22.9726, pumpfun_total_transactions: 89, pumpfun_reply_count: 16, pumpfun_total_volume_sol: 138.6495, dev_wallet_buy_volume: 1, dev_wallet_sell_volume: 1.0075, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: new, pumpfun_neutral_count: 9, pumpfun_hft_count: 8, pumpfun_new_count: 62, pumpfun_neutral_holdings_percentage: 3.6650, pumpfun_hft_holdings_percentage: 2.2820, pumpfun_new_holdings_percentage: 94.0540, wallet_bundle_total_holdings_percentage: 85.0196, raydium_holders_percentage: 30.0525, og_holders_percentage: 69.9475",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.0070 | INITIAL_CONDITIONS: unique_holders: 772, market_cap: 92811, name_similarity: 0.6111, symbol_similarity: 0.5000, hours_since_inception: 7.4945, top_10_percentage: 25.8600, dev_token_percentage: 0, number_of_bundles: 56, number_of_bots: 9, currently_held_percentage_of_bots: 23.7051, max_sol_spent_in_bundle: 6.3434, bundle_max_unique_wallets: 5, bundle_max_percent_held: 4.2326, bundle_wallet_holdings_percentage: 18.3622, pumpfun_unique_traders: 803, pumpfun_top_10_holders_percentage: 39.7330, pumpfun_total_transactions: 2329, pumpfun_reply_count: 186, pumpfun_total_volume_sol: 689.1273, dev_wallet_buy_volume: 0.2000, dev_wallet_sell_volume: 0.2029, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: neutral, pumpfun_neutral_count: 74, pumpfun_hft_count: 16, pumpfun_new_count: 11, pumpfun_neutral_holdings_percentage: 47.0850, pumpfun_hft_holdings_percentage: 3.5510, pumpfun_new_holdings_percentage: 6.0410, wallet_bundle_total_holdings_percentage: 3.7474, raydium_holders_percentage: 30.8711, og_holders_percentage: 65.2116",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.0087 | INITIAL_CONDITIONS: unique_holders: 124, market_cap: 92933, name_similarity: 0.6667, symbol_similarity: 0.6667, hours_since_inception: 0.0375, top_10_percentage: 39.0400, dev_token_percentage: 26.8250, number_of_bundles: 7, number_of_bots: 3, currently_held_percentage_of_bots: 49.7743, max_sol_spent_in_bundle: 42.0496, bundle_max_unique_wallets: 18, bundle_max_percent_held: 49.8545, bundle_wallet_holdings_percentage: 99.2721, pumpfun_unique_traders: 42, pumpfun_top_10_holders_percentage: 68.8390, pumpfun_total_transactions: 48, pumpfun_reply_count: 15, pumpfun_total_volume_sol: 103.7763, dev_wallet_buy_volume: 10, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 32, pumpfun_hft_count: 7, pumpfun_new_count: 3, pumpfun_neutral_holdings_percentage: 92.9010, pumpfun_hft_holdings_percentage: 4.1150, pumpfun_new_holdings_percentage: 2.9850, wallet_bundle_total_holdings_percentage: 15.9511, raydium_holders_percentage: 36.3774, og_holders_percentage: 63.6226",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0166 | INITIAL_CONDITIONS: unique_holders: 440, market_cap: 91146, name_similarity: 0.4878, symbol_similarity: 0.5000, hours_since_inception: 0.1243, top_10_percentage: 21.3600, dev_token_percentage: 0, number_of_bundles: 90, number_of_bots: 11, currently_held_percentage_of_bots: 9.0439, max_sol_spent_in_bundle: 9.1960, bundle_max_unique_wallets: 13, bundle_max_percent_held: 5.6608, bundle_wallet_holdings_percentage: 59.8014, pumpfun_unique_traders: 377, pumpfun_top_10_holders_percentage: 33.9162, pumpfun_total_transactions: 615, pumpfun_reply_count: 12, pumpfun_total_volume_sol: 360.6009, dev_wallet_buy_volume: 1, dev_wallet_sell_volume: 1.0182, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: neutral, pumpfun_neutral_count: 86, pumpfun_hft_count: 4, pumpfun_new_count: 10, pumpfun_neutral_holdings_percentage: 72.3320, pumpfun_hft_holdings_percentage: 0.6630, pumpfun_new_holdings_percentage: 4.9020, wallet_bundle_total_holdings_percentage: 3.8222, raydium_holders_percentage: 48.3513, og_holders_percentage: 51.6487",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.0179 | INITIAL_CONDITIONS: unique_holders: 142, market_cap: 93597, name_similarity: 0.5556, symbol_similarity: 0.5882, hours_since_inception: 23.1689, top_10_percentage: 17.8300, dev_token_percentage: 0, number_of_bundles: 5, number_of_bots: 2, currently_held_percentage_of_bots: 78.0936, max_sol_spent_in_bundle: 8.3646, bundle_max_unique_wallets: 4, bundle_max_percent_held: 6.1597, bundle_wallet_holdings_percentage: 10.9301, pumpfun_unique_traders: 112, pumpfun_top_10_holders_percentage: 99.3110, pumpfun_total_transactions: 200, pumpfun_reply_count: 43, pumpfun_total_volume_sol: 406.7463, dev_wallet_buy_volume: 0, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 0, dev_wallet_sell_count: 0, dev_wallet_flag: null, pumpfun_neutral_count: 37, pumpfun_hft_count: 9, pumpfun_new_count: 54, pumpfun_neutral_holdings_percentage: 13.8530, pumpfun_hft_holdings_percentage: 1.2490, pumpfun_new_holdings_percentage: 157.5470, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 23.8876, og_holders_percentage: 76.1124",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.2448 | INITIAL_CONDITIONS: unique_holders: 286, market_cap: 113722, name_similarity: 0.4762, symbol_similarity: 0.6000, hours_since_inception: 2.3282, top_10_percentage: 25.2800, dev_token_percentage: 5.1095, number_of_bundles: 15, number_of_bots: 6, currently_held_percentage_of_bots: 2.0256, max_sol_spent_in_bundle: 6.3774, bundle_max_unique_wallets: 10, bundle_max_percent_held: 6.4451, bundle_wallet_holdings_percentage: 13.2550, pumpfun_unique_traders: 319, pumpfun_top_10_holders_percentage: 35.9296, pumpfun_total_transactions: 828, pumpfun_reply_count: 59, pumpfun_total_volume_sol: 379.2582, dev_wallet_buy_volume: 1.5000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 80, pumpfun_hft_count: 12, pumpfun_new_count: 8, pumpfun_neutral_holdings_percentage: 72.2560, pumpfun_hft_holdings_percentage: 7.1880, pumpfun_new_holdings_percentage: 6.7220, wallet_bundle_total_holdings_percentage: 2.2611, raydium_holders_percentage: 26.7004, og_holders_percentage: 73.1132",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0016 | INITIAL_CONDITIONS: unique_holders: 292, market_cap: 242184, name_similarity: 0.7143, symbol_similarity: 0.6154, hours_since_inception: 0.5790, top_10_percentage: 17.1300, dev_token_percentage: 0, number_of_bundles: 7, number_of_bots: 1, currently_held_percentage_of_bots: 0, max_sol_spent_in_bundle: 47.2346, bundle_max_unique_wallets: 34, bundle_max_percent_held: 47.9120, bundle_wallet_holdings_percentage: 92.5119, pumpfun_unique_traders: 79, pumpfun_top_10_holders_percentage: 22.9726, pumpfun_total_transactions: 89, pumpfun_reply_count: 16, pumpfun_total_volume_sol: 138.6495, dev_wallet_buy_volume: 1, dev_wallet_sell_volume: 1.0075, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: new, pumpfun_neutral_count: 9, pumpfun_hft_count: 8, pumpfun_new_count: 62, pumpfun_neutral_holdings_percentage: 3.6650, pumpfun_hft_holdings_percentage: 2.2820, pumpfun_new_holdings_percentage: 94.0540, wallet_bundle_total_holdings_percentage: 85.0196, raydium_holders_percentage: 30.0525, og_holders_percentage: 69.9475",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0016 | INITIAL_CONDITIONS: unique_holders: 292, market_cap: 242184, name_similarity: 0.7143, symbol_similarity: 0.6154, hours_since_inception: 0.5790, top_10_percentage: 17.1300, dev_token_percentage: 0, number_of_bundles: 7, number_of_bots: 1, currently_held_percentage_of_bots: 0, max_sol_spent_in_bundle: 47.2346, bundle_max_unique_wallets: 34, bundle_max_percent_held: 47.9120, bundle_wallet_holdings_percentage: 92.5119, pumpfun_unique_traders: 79, pumpfun_top_10_holders_percentage: 22.9726, pumpfun_total_transactions: 89, pumpfun_reply_count: 16, pumpfun_total_volume_sol: 138.6495, dev_wallet_buy_volume: 1, dev_wallet_sell_volume: 1.0075, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: new, pumpfun_neutral_count: 9, pumpfun_hft_count: 8, pumpfun_new_count: 62, pumpfun_neutral_holdings_percentage: 3.6650, pumpfun_hft_holdings_percentage: 2.2820, pumpfun_new_holdings_percentage: 94.0540, wallet_bundle_total_holdings_percentage: 85.0196, raydium_holders_percentage: 30.0525, og_holders_percentage: 69.9475",
+        "HISTORICAL_OUTCOME: Token achieved PnL of 0.0484 | INITIAL_CONDITIONS: unique_holders: 291, market_cap: 88995, name_similarity: 0.6000, symbol_similarity: 0.6250, hours_since_inception: 0.4302, top_10_percentage: 10.3000, dev_token_percentage: 0.0161, number_of_bundles: 417, number_of_bots: 18, currently_held_percentage_of_bots: 82.6457, max_sol_spent_in_bundle: 41.5766, bundle_max_unique_wallets: 21, bundle_max_percent_held: 78.6401, bundle_wallet_holdings_percentage: 95.5490, pumpfun_unique_traders: 268, pumpfun_top_10_holders_percentage: 58.3389, pumpfun_total_transactions: 2876, pumpfun_reply_count: 48, pumpfun_total_volume_sol: 97.7471, dev_wallet_buy_volume: 1.0000, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 27, pumpfun_hft_count: 65, pumpfun_new_count: 8, pumpfun_neutral_holdings_percentage: 80.8930, pumpfun_hft_holdings_percentage: 9.0010, pumpfun_new_holdings_percentage: 0.5900, wallet_bundle_total_holdings_percentage: 12.7319, raydium_holders_percentage: 23.6794, og_holders_percentage: 76.3206",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.9221 | INITIAL_CONDITIONS: unique_holders: 171, market_cap: 317503, name_similarity: 0.4545, symbol_similarity: 0.5000, hours_since_inception: 0.2034, top_10_percentage: 44.3600, dev_token_percentage: 9.6658, number_of_bundles: 5, number_of_bots: 2, currently_held_percentage_of_bots: 3.3745, max_sol_spent_in_bundle: 16.1891, bundle_max_unique_wallets: 6, bundle_max_percent_held: 20.8748, bundle_wallet_holdings_percentage: 68.9982, pumpfun_unique_traders: 44, pumpfun_top_10_holders_percentage: 59.1821, pumpfun_total_transactions: 51, pumpfun_reply_count: 62, pumpfun_total_volume_sol: 92.2540, dev_wallet_buy_volume: 2.9700, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 11, pumpfun_hft_count: 6, pumpfun_new_count: 27, pumpfun_neutral_holdings_percentage: 4.6940, pumpfun_hft_holdings_percentage: 4.0060, pumpfun_new_holdings_percentage: 91.3000, wallet_bundle_total_holdings_percentage: 90.3202, raydium_holders_percentage: 19.1965, og_holders_percentage: 80.8035",
+
+         // Failed Tokens (Complete Loss Outcomes)
+        "HISTORICAL_OUTCOME: Token resulted in complete loss with PnL of -1 | INITIAL_CONDITIONS: unique_holders: 303, market_cap: 76869, name_similarity: 0.5714, symbol_similarity: 0.5714, hours_since_inception: 349.7793, top_10_percentage: 24.8200, dev_token_percentage: 0.1785, number_of_bundles: 60, number_of_bots: 8, currently_held_percentage_of_bots: 2.9770, max_sol_spent_in_bundle: 9.4017, bundle_max_unique_wallets: 8, bundle_max_percent_held: 9.5562, bundle_wallet_holdings_percentage: 59.5162, pumpfun_unique_traders: 276, pumpfun_top_10_holders_percentage: 36.5693, pumpfun_total_transactions: 543, pumpfun_reply_count: 126, pumpfun_total_volume_sol: 361.9013, dev_wallet_buy_volume: 0.0500, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 87, pumpfun_hft_count: 4, pumpfun_new_count: 10, pumpfun_neutral_holdings_percentage: 66.0250, pumpfun_hft_holdings_percentage: 1.7590, pumpfun_new_holdings_percentage: 16.2830, wallet_bundle_total_holdings_percentage: 4.1732, raydium_holders_percentage: 47.9483, og_holders_percentage: 52.0517",
+        "HISTORICAL_OUTCOME: Token resulted in complete loss with PnL of -1 | INITIAL_CONDITIONS: unique_holders: 554, market_cap: 67234, name_similarity: 0.5405, symbol_similarity: 0.5556, hours_since_inception: 0.3819, top_10_percentage: 18.9400, dev_token_percentage: 0, number_of_bundles: 188, number_of_bots: 9, currently_held_percentage_of_bots: 8.0712, max_sol_spent_in_bundle: 14.9991, bundle_max_unique_wallets: 12, bundle_max_percent_held: 10.8848, bundle_wallet_holdings_percentage: 64.8946, pumpfun_unique_traders: 667, pumpfun_top_10_holders_percentage: 27.2051, pumpfun_total_transactions: 1444, pumpfun_reply_count: 104, pumpfun_total_volume_sol: 891.3366, dev_wallet_buy_volume: 0.2500, dev_wallet_sell_volume: 0.2510, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: neutral, pumpfun_neutral_count: 89, pumpfun_hft_count: 8, pumpfun_new_count: 4, pumpfun_neutral_holdings_percentage: 40.2720, pumpfun_hft_holdings_percentage: 7.7840, pumpfun_new_holdings_percentage: 2.4420, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 37.1605, og_holders_percentage: 62.8078",
+        "HISTORICAL_OUTCOME: Token resulted in complete loss with PnL of -1 | INITIAL_CONDITIONS: unique_holders: 411, market_cap: 93403, name_similarity: 0.5385, symbol_similarity: 0.7500, hours_since_inception: 1.8968, top_10_percentage: 25.2600, dev_token_percentage: 1.1395, number_of_bundles: 35, number_of_bots: 6, currently_held_percentage_of_bots: 13.2436, max_sol_spent_in_bundle: 6.2527, bundle_max_unique_wallets: 12, bundle_max_percent_held: 8.7549, bundle_wallet_holdings_percentage: 39.0841, pumpfun_unique_traders: 425, pumpfun_top_10_holders_percentage: 36.7691, pumpfun_total_transactions: 862, pumpfun_reply_count: 100, pumpfun_total_volume_sol: 453.8407, dev_wallet_buy_volume: 0.3220, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 81, pumpfun_hft_count: 9, pumpfun_new_count: 11, pumpfun_neutral_holdings_percentage: 58.5510, pumpfun_hft_holdings_percentage: 3.2560, pumpfun_new_holdings_percentage: 2.4650, wallet_bundle_total_holdings_percentage: 0.7821, raydium_holders_percentage: 34.8161, og_holders_percentage: 65.1107",
+        "HISTORICAL_OUTCOME: Token resulted in complete loss with PnL of -1 | INITIAL_CONDITIONS: unique_holders: 467, market_cap: 84033, name_similarity: 0.5000, symbol_similarity: 0.4000, hours_since_inception: 2.0735, top_10_percentage: 22.3200, dev_token_percentage: 0, number_of_bundles: 113, number_of_bots: 39, currently_held_percentage_of_bots: 20.4981, max_sol_spent_in_bundle: 13.1436, bundle_max_unique_wallets: 8, bundle_max_percent_held: 4.7994, bundle_wallet_holdings_percentage: 29.2563, pumpfun_unique_traders: 611, pumpfun_top_10_holders_percentage: 30.4047, pumpfun_total_transactions: 5993, pumpfun_reply_count: 618, pumpfun_total_volume_sol: 984.4893, dev_wallet_buy_volume: 0.0100, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 83, pumpfun_hft_count: 9, pumpfun_new_count: 9, pumpfun_neutral_holdings_percentage: 56.5360, pumpfun_hft_holdings_percentage: 1.2620, pumpfun_new_holdings_percentage: 1.9810, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 25.0412, og_holders_percentage: 74.9567",
+        "HISTORICAL_OUTCOME: Token resulted in complete loss with PnL of -1 | INITIAL_CONDITIONS: unique_holders: 565, market_cap: 104165, name_similarity: 0.5000, symbol_similarity: 0.6667, hours_since_inception: 2.6152, top_10_percentage: 19.1100, dev_token_percentage: 0, number_of_bundles: 106, number_of_bots: 8, currently_held_percentage_of_bots: 5.4152, max_sol_spent_in_bundle: 7.5518, bundle_max_unique_wallets: 10, bundle_max_percent_held: 4.5245, bundle_wallet_holdings_percentage: 36.5288, pumpfun_unique_traders: 799, pumpfun_top_10_holders_percentage: 27.8432, pumpfun_total_transactions: 2271, pumpfun_reply_count: 241, pumpfun_total_volume_sol: 977.8718, dev_wallet_buy_volume: 0.3000, dev_wallet_sell_volume: 0.5125, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: new, pumpfun_neutral_count: 84, pumpfun_hft_count: 10, pumpfun_new_count: 7, pumpfun_neutral_holdings_percentage: 43.8200, pumpfun_hft_holdings_percentage: 1.2530, pumpfun_new_holdings_percentage: 3.9560, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 28.7160, og_holders_percentage: 71.2238",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -0.9221 | INITIAL_CONDITIONS: unique_holders: 171, market_cap: 317503, name_similarity: 0.4545, symbol_similarity: 0.5000, hours_since_inception: 0.2034, top_10_percentage: 44.3600, dev_token_percentage: 9.6658, number_of_bundles: 5, number_of_bots: 2, currently_held_percentage_of_bots: 3.3745, max_sol_spent_in_bundle: 16.1891, bundle_max_unique_wallets: 6, bundle_max_percent_held: 20.8748, bundle_wallet_holdings_percentage: 68.9982, pumpfun_unique_traders: 44, pumpfun_top_10_holders_percentage: 59.1821, pumpfun_total_transactions: 51, pumpfun_reply_count: 62, pumpfun_total_volume_sol: 92.2540, dev_wallet_buy_volume: 2.9700, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: new, pumpfun_neutral_count: 11, pumpfun_hft_count: 6, pumpfun_new_count: 27, pumpfun_neutral_holdings_percentage: 4.6940, pumpfun_hft_holdings_percentage: 4.0060, pumpfun_new_holdings_percentage: 91.3000, wallet_bundle_total_holdings_percentage: 90.3202, raydium_holders_percentage: 19.1965, og_holders_percentage: 80.8035",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -1.0000 | INITIAL_CONDITIONS: unique_holders: 303, market_cap: 76869, name_similarity: 0.5714, symbol_similarity: 0.5714, hours_since_inception: 349.7793, top_10_percentage: 24.8200, dev_token_percentage: 0.1785, number_of_bundles: 60, number_of_bots: 8, currently_held_percentage_of_bots: 2.9770, max_sol_spent_in_bundle: 9.4017, bundle_max_unique_wallets: 8, bundle_max_percent_held: 9.5562, bundle_wallet_holdings_percentage: 59.5162, pumpfun_unique_traders: 276, pumpfun_top_10_holders_percentage: 36.5693, pumpfun_total_transactions: 543, pumpfun_reply_count: 126, pumpfun_total_volume_sol: 361.9013, dev_wallet_buy_volume: 0.0500, dev_wallet_sell_volume: 0, dev_wallet_buy_count: 1, dev_wallet_sell_count: 0, dev_wallet_flag: neutral, pumpfun_neutral_count: 87, pumpfun_hft_count: 4, pumpfun_new_count: 10, pumpfun_neutral_holdings_percentage: 66.0250, pumpfun_hft_holdings_percentage: 1.7590, pumpfun_new_holdings_percentage: 16.2830, wallet_bundle_total_holdings_percentage: 4.1732, raydium_holders_percentage: 47.9483, og_holders_percentage: 52.0517",
+        "HISTORICAL_OUTCOME: Token achieved PnL of -1.0000 | INITIAL_CONDITIONS: unique_holders: 554, market_cap: 67234, name_similarity: 0.5405, symbol_similarity: 0.5556, hours_since_inception: 0.3819, top_10_percentage: 18.9400, dev_token_percentage: 0, number_of_bundles: 188, number_of_bots: 9, currently_held_percentage_of_bots: 8.0712, max_sol_spent_in_bundle: 14.9991, bundle_max_unique_wallets: 12, bundle_max_percent_held: 10.8848, bundle_wallet_holdings_percentage: 64.8946, pumpfun_unique_traders: 667, pumpfun_top_10_holders_percentage: 27.2051, pumpfun_total_transactions: 1444, pumpfun_reply_count: 104, pumpfun_total_volume_sol: 891.3366, dev_wallet_buy_volume: 0.2500, dev_wallet_sell_volume: 0.2510, dev_wallet_buy_count: 1, dev_wallet_sell_count: 1, dev_wallet_flag: neutral, pumpfun_neutral_count: 89, pumpfun_hft_count: 8, pumpfun_new_count: 4, pumpfun_neutral_holdings_percentage: 40.2720, pumpfun_hft_holdings_percentage: 7.7840, pumpfun_new_holdings_percentage: 2.4420, wallet_bundle_total_holdings_percentage: 0, raydium_holders_percentage: 37.1605, og_holders_percentage: 62.8078",
+    ],
+}
