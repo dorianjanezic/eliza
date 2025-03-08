@@ -83,7 +83,7 @@ Custom fetch function to use for making requests.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:208](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L208)
+[packages/core/src/runtime.ts:210](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L210)
 
 ## Properties
 
@@ -412,6 +412,16 @@ Searchable document fragments
 
 [packages/core/src/runtime.ts:144](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L144)
 
+***
+
+### scheduledTasks
+
+> **scheduledTasks**: `Map`\<`string`, `Timeout`\> = `null`
+
+#### Defined in
+
+[packages/core/src/runtime.ts:146](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L146)
+
 ## Methods
 
 ### registerMemoryManager()
@@ -432,7 +442,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:146](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L146)
+[packages/core/src/runtime.ts:148](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L148)
 
 ***
 
@@ -454,7 +464,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:161](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L161)
+[packages/core/src/runtime.ts:163](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L163)
 
 ***
 
@@ -480,7 +490,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:165](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L165)
+[packages/core/src/runtime.ts:167](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L167)
 
 ***
 
@@ -502,7 +512,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:174](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L174)
+[packages/core/src/runtime.ts:176](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L176)
 
 ***
 
@@ -520,7 +530,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:375](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L375)
+[packages/core/src/runtime.ts:377](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L377)
 
 ***
 
@@ -542,7 +552,7 @@ Searchable document fragments
 
 #### Defined in
 
-[packages/core/src/runtime.ts:439](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L439)
+[packages/core/src/runtime.ts:441](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L441)
 
 ***
 
@@ -564,7 +574,7 @@ The number of recent messages to be kept in memory.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:461](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L461)
+[packages/core/src/runtime.ts:463](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L463)
 
 ***
 
@@ -590,7 +600,7 @@ The action to register.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:469](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L469)
+[packages/core/src/runtime.ts:471](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L471)
 
 ***
 
@@ -612,7 +622,7 @@ The evaluator to register.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:478](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L478)
+[packages/core/src/runtime.ts:480](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L480)
 
 ***
 
@@ -634,7 +644,7 @@ The context provider to register.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:486](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L486)
+[packages/core/src/runtime.ts:488](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L488)
 
 ***
 
@@ -666,7 +676,7 @@ The message to process.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:495](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L495)
+[packages/core/src/runtime.ts:497](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L497)
 
 ***
 
@@ -702,7 +712,7 @@ The results of the evaluation.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:572](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L572)
+[packages/core/src/runtime.ts:574](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L574)
 
 ***
 
@@ -734,7 +744,7 @@ An error if the participant cannot be added.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:642](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L642)
+[packages/core/src/runtime.ts:644](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L644)
 
 ***
 
@@ -770,7 +780,7 @@ The user name to ensure the existence of.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:658](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L658)
+[packages/core/src/runtime.ts:660](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L660)
 
 ***
 
@@ -794,7 +804,7 @@ The user name to ensure the existence of.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:678](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L678)
+[packages/core/src/runtime.ts:680](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L680)
 
 ***
 
@@ -824,7 +834,7 @@ The user name to ensure the existence of.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:695](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L695)
+[packages/core/src/runtime.ts:697](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L697)
 
 ***
 
@@ -855,7 +865,7 @@ An error if the room cannot be created.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:731](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L731)
+[packages/core/src/runtime.ts:733](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L733)
 
 ***
 
@@ -885,7 +895,7 @@ The state of the agent.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:744](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L744)
+[packages/core/src/runtime.ts:746](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L746)
 
 ***
 
@@ -907,4 +917,34 @@ The state of the agent.
 
 #### Defined in
 
-[packages/core/src/runtime.ts:1190](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L1190)
+[packages/core/src/runtime.ts:1192](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L1192)
+
+***
+
+### scheduleTask()
+
+> **scheduleTask**(`task`): `Promise`\<`void`\>
+
+Schedule a task to be executed at a specific time
+
+#### Parameters
+
+• **task**
+
+• **task.taskId**: `string`
+
+• **task.executeAt**: `Date`
+
+• **task.task**
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Implementation of
+
+[`IAgentRuntime`](../interfaces/IAgentRuntime.md).[`scheduleTask`](../interfaces/IAgentRuntime.md#scheduleTask)
+
+#### Defined in
+
+[packages/core/src/runtime.ts:1259](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/runtime.ts#L1259)

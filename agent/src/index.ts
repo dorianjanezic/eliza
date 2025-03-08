@@ -21,12 +21,13 @@ import {
     settings,
     stringToUuid,
     validateCharacterConfig,
+    Memory,
 } from "@ai16z/eliza";
 import { zgPlugin } from "@ai16z/plugin-0g";
 import { goatPlugin } from "@ai16z/plugin-goat";
 import { bootstrapPlugin } from "@ai16z/plugin-bootstrap";
-import supabasePlugin from "@ai16z/plugin-supabase";
-
+// import { tokenPredictionPlugin } from "@ai16z/plugin-token-prediction";
+import { tokenPredictionPlugin } from "@ai16z/plugin-token-prediction";
 // import { buttplugPlugin } from "@ai16z/plugin-buttplug";
 import {
     coinbaseCommercePlugin,
@@ -365,7 +366,7 @@ export function createAgent(
         character,
         plugins: [
             bootstrapPlugin,
-            supabasePlugin,
+            // supabasePlugin,
             getSecret(character, "CONFLUX_CORE_PRIVATE_KEY")
                 ? confluxPlugin
                 : null,
@@ -395,6 +396,9 @@ export function createAgent(
                 : []),
             getSecret(character, "WALLET_SECRET_SALT") ? teePlugin : null,
             getSecret(character, "ALCHEMY_API_KEY") ? goatPlugin : null,
+            getSecret(character, "SUPABASE_URL") && getSecret(character, "SUPABASE_ANON_KEY")
+                ? tokenPredictionPlugin
+                : null,
         ].filter(Boolean),
         providers: [],
         actions: [],
@@ -419,43 +423,53 @@ function intializeDbCache(character: Character, db: IDatabaseCacheAdapter) {
 async function startAgent(character: Character, directClient) {
     let db: IDatabaseAdapter & IDatabaseCacheAdapter;
     try {
-        character.id ??= stringToUuid(character.name);
-        character.username ??= character.name;
+      character.id ??= stringToUuid(character.name);
+      character.username ??= character.name;
 
-        const token = getTokenForProvider(character.modelProvider, character);
-        const dataDir = path.join(__dirname, "../data");
+      const token = getTokenForProvider(character.modelProvider, character);
+      const dataDir = path.join(__dirname, "../data");
 
-        if (!fs.existsSync(dataDir)) {
-            fs.mkdirSync(dataDir, { recursive: true });
+      if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+      }
+
+      db = initializeDatabase(dataDir) as IDatabaseAdapter & IDatabaseCacheAdapter;
+
+      await db.init();
+
+      const cache = intializeDbCache(character, db);
+      const runtime = createAgent(character, db, cache, token);
+
+      await runtime.initialize();
+
+      // Manually trigger the startPredictionStream action
+      const tokenPredictionPlugin = runtime.plugins.find(p => p.name === "token-prediction");
+      if (tokenPredictionPlugin) {
+        const startAction = tokenPredictionPlugin.actions?.find(a => a.name === "startPredictionStream");
+        if (startAction) {
+          elizaLogger.info("Triggering startPredictionStream action...");
+          await startAction.handler(runtime, { id: stringToUuid("initial"), content: { text: "initialization" } } as Memory); // Mock memory
+        } else {
+          elizaLogger.warn("startPredictionStream action not found in token-prediction plugin");
         }
+      } else {
+        elizaLogger.warn("token-prediction plugin not loaded");
+      }
 
-        db = initializeDatabase(dataDir) as IDatabaseAdapter &
-            IDatabaseCacheAdapter;
+      const clients = await initializeClients(character, runtime);
 
-        await db.init();
+      directClient.registerAgent(runtime);
 
-        const cache = intializeDbCache(character, db);
-        const runtime = createAgent(character, db, cache, token);
-
-        await runtime.initialize();
-
-        const clients = await initializeClients(character, runtime);
-
-        directClient.registerAgent(runtime);
-
-        return clients;
+      return clients;
     } catch (error) {
-        elizaLogger.error(
-            `Error starting agent for character ${character.name}:`,
-            error
-        );
-        console.error(error);
-        if (db) {
-            await db.close();
-        }
-        throw error;
+      elizaLogger.error(`Error starting agent for character ${character.name}:`, error);
+      console.error(error);
+      if (db) {
+        await db.close();
+      }
+      throw error;
     }
-}
+  }
 
 const startAgents = async () => {
     const directClient = await DirectClientInterface.start();

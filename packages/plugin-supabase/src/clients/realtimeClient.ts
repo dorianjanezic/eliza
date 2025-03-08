@@ -2,7 +2,7 @@ import WebSocket from 'ws';
 import { EventEmitter } from 'events';
 import { TokenUpdate } from '../types';
 import { TokenProcessingClient } from './tokenProcessingClient';
-import { elizaLogger, stringToUuid, type UUID, type AgentRuntime, type IDatabaseAdapter } from '@ai16z/eliza';
+import { elizaLogger, stringToUuid, type UUID, type IAgentRuntime, type IDatabaseAdapter } from '@ai16z/eliza';
 
 // Define TokenMetadata interface locally since it's specific to this use case
 interface TokenMetadata {
@@ -26,7 +26,7 @@ export class TokenUpdateClient extends EventEmitter {
     constructor(
         private url: string,
         private apiKey: string,
-        private runtime: AgentRuntime
+        private runtime: IAgentRuntime
     ) {
         super();
     }
@@ -181,7 +181,7 @@ export class SupabaseClientWrapper {
     private initialized: boolean = false;
     private agentId: UUID;
 
-    private constructor(private runtime: AgentRuntime) {
+    private constructor(private runtime: IAgentRuntime) {
         this.processingClient = new TokenProcessingClient(runtime);
         this.agentId = runtime.agentId;
 
@@ -205,7 +205,7 @@ export class SupabaseClientWrapper {
         });
     }
 
-    static getInstance(runtime: AgentRuntime): SupabaseClientWrapper {
+    static getInstance(runtime: IAgentRuntime): SupabaseClientWrapper {
         if (!supabaseClientInstance) {
             supabaseClientInstance = new SupabaseClientWrapper(runtime);
         }

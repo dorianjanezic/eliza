@@ -24,7 +24,7 @@
 
 #### Defined in
 
-[packages/core/src/types.ts:969](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L969)
+[packages/core/src/types.ts:974](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L974)
 
 ## Methods
 
@@ -48,7 +48,7 @@ Add abstract initialize method that must be implemented by derived classes
 
 #### Defined in
 
-[packages/core/src/types.ts:974](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L974)
+[packages/core/src/types.ts:979](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L979)
 
 ***
 
@@ -66,7 +66,7 @@ Add abstract initialize method that must be implemented by derived classes
 
 #### Defined in
 
-[packages/core/src/types.ts:1076](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1076)
+[packages/core/src/types.ts:1090](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1090)
 
 ***
 
@@ -84,7 +84,7 @@ Add abstract initialize method that must be implemented by derived classes
 
 #### Defined in
 
-[packages/core/src/types.ts:1077](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1077)
+[packages/core/src/types.ts:1091](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1091)
 
 ***
 
@@ -102,7 +102,7 @@ Add abstract initialize method that must be implemented by derived classes
 
 #### Defined in
 
-[packages/core/src/types.ts:1078](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1078)
+[packages/core/src/types.ts:1092](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1092)
 
 ***
 
@@ -122,4 +122,4 @@ Add abstract initialize method that must be implemented by derived classes
 
 #### Defined in
 
-[packages/core/src/types.ts:1079](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1079)
+[packages/core/src/types.ts:1093](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L1093)

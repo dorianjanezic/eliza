@@ -987,57 +987,29 @@ A Promise that resolves to a boolean indicating success or failure.
 
 ### getParticipantsForAccount()
 
-#### getParticipantsForAccount(userId)
-
 > `abstract` **getParticipantsForAccount**(`userId`): `Promise`\<[`Participant`](../interfaces/Participant.md)[]\>
 
 Retrieves participants associated with a specific account.
 
-##### Parameters
+#### Parameters
 
 • **userId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
 
 The UUID of the account.
 
-##### Returns
+#### Returns
 
 `Promise`\<[`Participant`](../interfaces/Participant.md)[]\>
 
 A Promise that resolves to an array of Participant objects.
 
-##### Implementation of
+#### Implementation of
 
 [`IDatabaseAdapter`](../interfaces/IDatabaseAdapter.md).[`getParticipantsForAccount`](../interfaces/IDatabaseAdapter.md#getParticipantsForAccount)
 
-##### Defined in
+#### Defined in
 
 [packages/core/src/database.ts:328](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L328)
-
-#### getParticipantsForAccount(userId)
-
-> `abstract` **getParticipantsForAccount**(`userId`): `Promise`\<[`Participant`](../interfaces/Participant.md)[]\>
-
-Retrieves participants associated with a specific account.
-
-##### Parameters
-
-• **userId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
-
-The UUID of the account.
-
-##### Returns
-
-`Promise`\<[`Participant`](../interfaces/Participant.md)[]\>
-
-A Promise that resolves to an array of Participant objects.
-
-##### Implementation of
-
-`IDatabaseAdapter.getParticipantsForAccount`
-
-##### Defined in
-
-[packages/core/src/database.ts:335](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L335)
 
 ***
 
@@ -1065,7 +1037,7 @@ A Promise that resolves to an array of UUIDs representing the participants.
 
 #### Defined in
 
-[packages/core/src/database.ts:342](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L342)
+[packages/core/src/database.ts:335](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L335)
 
 ***
 
@@ -1089,7 +1061,7 @@ A Promise that resolves to an array of UUIDs representing the participants.
 
 #### Defined in
 
-[packages/core/src/database.ts:344](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L344)
+[packages/core/src/database.ts:337](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L337)
 
 ***
 
@@ -1115,7 +1087,7 @@ A Promise that resolves to an array of UUIDs representing the participants.
 
 #### Defined in
 
-[packages/core/src/database.ts:348](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L348)
+[packages/core/src/database.ts:341](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L341)
 
 ***
 
@@ -1147,7 +1119,7 @@ A Promise that resolves to a boolean indicating success or failure of the creati
 
 #### Defined in
 
-[packages/core/src/database.ts:359](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L359)
+[packages/core/src/database.ts:352](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L352)
 
 ***
 
@@ -1179,7 +1151,7 @@ A Promise that resolves to the Relationship object or null if not found.
 
 #### Defined in
 
-[packages/core/src/database.ts:369](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L369)
+[packages/core/src/database.ts:362](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L362)
 
 ***
 
@@ -1209,7 +1181,7 @@ A Promise that resolves to an array of Relationship objects.
 
 #### Defined in
 
-[packages/core/src/database.ts:379](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L379)
+[packages/core/src/database.ts:372](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L372)
 
 ***
 
@@ -1245,4 +1217,102 @@ Will throw an error if the circuit breaker is open or if the operation fails
 
 #### Defined in
 
-[packages/core/src/database.ts:391](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L391)
+[packages/core/src/database.ts:384](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L384)
+
+***
+
+### isTokenProcessed()
+
+> **isTokenProcessed**(`token`, `agentId`): `Promise`\<`boolean`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+#### Implementation of
+
+[`IDatabaseAdapter`](../interfaces/IDatabaseAdapter.md).[`isTokenProcessed`](../interfaces/IDatabaseAdapter.md#isTokenProcessed)
+
+#### Defined in
+
+[packages/core/src/database.ts:399](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L399)
+
+***
+
+### storeProcessedToken()
+
+> **storeProcessedToken**(`token`, `metadata`, `agentId`): `Promise`\<`void`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **metadata**: `any`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Implementation of
+
+[`IDatabaseAdapter`](../interfaces/IDatabaseAdapter.md).[`storeProcessedToken`](../interfaces/IDatabaseAdapter.md#storeProcessedToken)
+
+#### Defined in
+
+[packages/core/src/database.ts:403](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L403)
+
+***
+
+### getTokenMetadata()
+
+> **getTokenMetadata**(`token`, `agentId`): `Promise`\<`any`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`any`\>
+
+#### Implementation of
+
+[`IDatabaseAdapter`](../interfaces/IDatabaseAdapter.md).[`getTokenMetadata`](../interfaces/IDatabaseAdapter.md#getTokenMetadata)
+
+#### Defined in
+
+[packages/core/src/database.ts:407](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L407)
+
+***
+
+### removeProcessedToken()
+
+> **removeProcessedToken**(`token`, `agentId`): `Promise`\<`void`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Implementation of
+
+[`IDatabaseAdapter`](../interfaces/IDatabaseAdapter.md).[`removeProcessedToken`](../interfaces/IDatabaseAdapter.md#removeProcessedToken)
+
+#### Defined in
+
+[packages/core/src/database.ts:411](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/database.ts#L411)

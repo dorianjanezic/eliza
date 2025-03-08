@@ -781,3 +781,85 @@ Get memories matching criteria
 #### Defined in
 
 [packages/core/src/types.ts:887](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L887)
+
+***
+
+### isTokenProcessed()
+
+> **isTokenProcessed**(`token`, `agentId`): `Promise`\<`boolean`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`boolean`\>
+
+#### Defined in
+
+[packages/core/src/types.ts:889](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L889)
+
+***
+
+### storeProcessedToken()
+
+> **storeProcessedToken**(`token`, `metadata`, `agentId`): `Promise`\<`void`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **metadata**: `any`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Defined in
+
+[packages/core/src/types.ts:890](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L890)
+
+***
+
+### getTokenMetadata()
+
+> **getTokenMetadata**(`token`, `agentId`): `Promise`\<`any`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`any`\>
+
+#### Defined in
+
+[packages/core/src/types.ts:891](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L891)
+
+***
+
+### removeProcessedToken()
+
+> **removeProcessedToken**(`token`, `agentId`): `Promise`\<`void`\>
+
+#### Parameters
+
+• **token**: `string`
+
+• **agentId**: \`$\{string\}-$\{string\}-$\{string\}-$\{string\}-$\{string\}\`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+#### Defined in
+
+[packages/core/src/types.ts:892](https://github.com/dorianjanezic/eliza/blob/main/packages/core/src/types.ts#L892)
