@@ -2,7 +2,7 @@ import WebSocket from "ws";
 import { elizaLogger } from "@ai16z/eliza";
 import { EventEmitter } from "events";
 import { IAgentRuntime } from "@ai16z/eliza";
-import { TokenUpdateEvent } from "../types"; // Adjust path as needed
+import { TokenUpdateEvent, TokenData } from "../types"; // Adjust path as needed
 
 export class TokenStreamProvider extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -124,10 +124,36 @@ export class TokenStreamProvider extends EventEmitter {
               return;
             }
 
-            const tokenUpdate: TokenUpdateEvent = {
-                tokenData: { tokenId, address, symbol, name },
-                timestamp: change.commit_timestamp,
-              };
+             // Construct enriched TokenData
+        const tokenData: TokenData = {
+            tokenId,
+            address,
+            symbol,
+            name,
+            description: change.record.token_info?.description,
+            createdAt: change.record.token_info?.created_at,
+            status: change.record.token_info?.status,
+            marketCap: change.record.market_data?.market_cap || 0,
+            uniqueHolders: change.record.market_data?.unique_holders,
+            pairCreatedAt: change.record.market_data?.pair_created_at,
+            top10Percentage: change.record.holder_distribution?.top_10_percentage,
+            pumpfunTop10HoldersPercentage: change.record.holder_distribution?.pumpfun_top_10_holders_percentage,
+            ogHoldersPercentage: change.record.holder_distribution?.og_holders_percentage,
+            pumpfunTotalVolumeSol: change.record.trading_activity?.pumpfun_total_volume_sol,
+            pumpfunTotalTransactions: change.record.trading_activity?.pumpfun_total_transactions,
+            pumpfunUniqueTraders: change.record.trading_activity?.pumpfun_unique_traders,
+            pumpfunReplyCount: change.record.trading_activity?.pumpfun_reply_count,
+            numberOfBundles: change.record.bundle_info?.number_of_bundles,
+            bundleMaxPercentHeld: change.record.bundle_info?.bundle_max_percent_held,
+            numberOfBots: change.record.bundle_info?.number_of_bots,
+            devTokenPercentage: change.record.developer_info?.dev_token_percentage,
+            // volume1h, uniqueTraders1h, holders can still come from MarketDataProvider if not in initial data
+        };
+
+        const tokenUpdate: TokenUpdateEvent = {
+            tokenData,
+            timestamp: change.commit_timestamp,
+        };
               this.emit("tokenUpdate", tokenUpdate.tokenData); // Emit TokenData directly
               elizaLogger.info("Token update emitted:", {
                 tokenId,

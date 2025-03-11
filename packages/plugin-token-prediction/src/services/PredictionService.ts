@@ -21,6 +21,8 @@ export class PredictionService {
             const pastPredictions = await this.learningService.getRecentPredictions();
             const accuracyStats = await this.learningService.getHistoricalAccuracy();
 
+            elizaLogger.info("Past Predictions:", { pastPredictions });
+
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,

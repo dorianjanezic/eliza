@@ -60,10 +60,8 @@ export class LearningService {
 
       async getRecentPredictions(limit: number = 5): Promise<string> {
         try {
-            const memories = await this.runtime.messageManager.getMemories({
-                roomId: this.globalSummaryRoomId,
-                count: limit,
-                unique: true
+            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
+                roomIds: [this.globalSummaryRoomId],
             });
 
             if (memories.length === 0) return "No recent predictions available.";
