@@ -66,14 +66,25 @@ export class LearningService {
 
             if (memories.length === 0) return "No recent predictions available.";
 
-            return memories.map(m => {
+            // Sort memories by createdAt in descending order
+            const sortedMemories = memories.sort((a, b) =>
+                (b.createdAt ?? 0) - (a.createdAt ?? 0)
+            );
+
+            return sortedMemories.slice(0, limit).map(m => {
                 const { prediction, results } = m.content.metadata as PredictionResult;
+                const perStepResults = results.mapePerStep?.map(step =>
+                    `      ${step.time}: Target ${prediction.marketCapPredictions[step.time as keyof typeof prediction.marketCapPredictions]} ` +
+                    `(${step.achieved ? "✓" : "✗"}, MAPE: ${(step.mape * 100).toFixed(2)}%)`
+                ).join('\n') ?? '';
+
                 return `Token Prediction (${new Date(m.createdAt ?? Date.now()).toISOString()}):
-                    - Decision: ${prediction.entryDecision}
-                    - Target (10min): ${prediction.marketCapPredictions["10min"]}
-                    - Actual Final: ${results?.finalMarketCap ?? 'N/A'}
-                    - Achieved Target: ${results?.achievedTarget ? "Yes" : "No"}
-                    - MAPE: ${results?.mape ? (results.mape * 100).toFixed(2) : 'N/A'}%`;
+                        - Decision: ${prediction.entryDecision}
+                        - Target (10min): ${prediction.marketCapPredictions["10min"]}
+                        - Actual Final: ${results?.finalMarketCap ?? 'N/A'}
+                        - Achieved Target: ${results?.achievedTarget ? "Yes" : "No"}
+                        - MAPE: ${results?.mape ? (results.mape * 100).toFixed(2) : 'N/A'}%
+                        - Per-step Results:\n${perStepResults}`;
             }).join("\n\n");
         } catch (error) {
             elizaLogger.error("Failed to get recent predictions:", error);

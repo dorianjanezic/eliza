@@ -1,11 +1,11 @@
 import { Plugin, IAgentRuntime, Action } from "@ai16z/eliza";
 import { elizaLogger } from "@ai16z/eliza";
-import { TokenStreamProvider, MarketDataProvider } from "./providers";
+import { TokenMigrationProvider, MarketDataProvider } from "./providers";
 import { PredictionService, LearningService } from "./services";
 import * as types from "./types";
 
 // Global reference for cleanup
-let tokenStreamProviderInstance: TokenStreamProvider | undefined;
+let tokenMigrationProviderInstance: TokenMigrationProvider | undefined;
 
 const startPredictionStream: Action = {
   name: "startPredictionStream",
@@ -14,69 +14,69 @@ const startPredictionStream: Action = {
   examples: [],
   validate: async () => true,
   handler: async (runtime: IAgentRuntime) => {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-      throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY environment variables");
-    }
-
+    // TokenMigrationProvider doesn’t require SUPABASE_URL or SUPABASE_ANON_KEY, so we remove this check
     elizaLogger.info("[Token Prediction Plugin] Initializing on agent start...");
 
     const marketDataProvider = new MarketDataProvider(runtime);
     const predictionService = new PredictionService(runtime);
     const learningService = new LearningService(runtime);
-    tokenStreamProviderInstance = new TokenStreamProvider(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_ANON_KEY!,
-      runtime
-    );
+    tokenMigrationProviderInstance = new TokenMigrationProvider(runtime);
 
-    tokenStreamProviderInstance.on("tokenUpdate", async (update: types.TokenData) => {
+    tokenMigrationProviderInstance.on("tokenUpdate", async (tokenData: types.TokenData) => {
+      try {
+        elizaLogger.info("Processing token update:", {
+          tokenId: tokenData.tokenId,
+          address: tokenData.address,
+        //   bundleData: tokenData.bundleData,
+        //   creatorRiskProfile: tokenData.creatorRiskProfile,
+        //   distribution: tokenData.distribution,
+        });
+
+        let marketData;
         try {
-          elizaLogger.info("Processing token update:", {
-            tokenId: update.tokenId,
-            address: update.address,
-            symbol: update.symbol,
-            name: update.name
-          });
-          let marketData;
-          try {
-            marketData = await marketDataProvider.getTokenMarketData(update.address);
-            elizaLogger.info("Fetched market data:", {
-              tokenId: update.tokenId,
-              marketCap: marketData.marketCap
-            });
-          } catch (apiError) {
-            elizaLogger.warn("Failed to fetch market data, using fallback:", {
-              tokenId: update.tokenId,
-              error: apiError instanceof Error ? apiError.message : "Unknown error",
-            });
-            marketData = { marketCap: 0 };
-          }
-          const enrichedTokenData = {
-            ...update,
+          marketData = await marketDataProvider.getTokenMarketData(tokenData.address);
+          elizaLogger.info("Fetched market data:", {
+            tokenId: tokenData.tokenId,
             marketCap: marketData.marketCap,
-            volume1h: marketData.volume1h,
+            volume1hUSD: marketData.volume1hUSD,
             uniqueTraders1h: marketData.uniqueTraders1h,
-            holders: marketData.holderCount,
-          };
-          await predictionService.predictToken(enrichedTokenData);
-        } catch (error) {
-          elizaLogger.error("Failed to process token update:", {
-            tokenId: update.tokenId,
-            error: error instanceof Error ? error.message : "Unknown error",
           });
+        } catch (apiError) {
+          elizaLogger.warn("Failed to fetch market data, using fallback:", {
+            tokenId: tokenData.tokenId,
+            error: apiError instanceof Error ? apiError.message : "Unknown error",
+          });
+          marketData = { marketCap: 0 };
         }
-      });
 
-    tokenStreamProviderInstance.connect();
+        const enrichedTokenData = {
+          ...tokenData,
+          marketCap: marketData.marketCap,
+          volume1hUSD: marketData.volume1hUSD,
+          uniqueTraders1h: marketData.uniqueTraders1h,
+          holders: marketData.holderCount,
+        };
+
+        // elizaLogger.info("Enriched token data:", { enrichedTokenData });
+        await predictionService.predictToken(enrichedTokenData);
+      } catch (error) {
+        elizaLogger.error("Failed to process token update:", {
+          tokenId: tokenData.tokenId,
+          error: error instanceof Error ? error.message : "Unknown error",
+        });
+      }
+    });
+
+    tokenMigrationProviderInstance.connect();
     elizaLogger.success("[Token Prediction Plugin] Initialized and stream started successfully");
 
     // Return cleanup function
     return {
       cleanup: async () => {
-        if (tokenStreamProviderInstance) {
+        if (tokenMigrationProviderInstance) {
           elizaLogger.info("[Token Prediction Plugin] Stopping prediction stream...");
-          tokenStreamProviderInstance.disconnect();
-          tokenStreamProviderInstance = undefined;
+          tokenMigrationProviderInstance.disconnect();
+          tokenMigrationProviderInstance = undefined;
           elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
         }
       },
@@ -91,10 +91,10 @@ const stopPredictionStream: Action = {
   examples: [],
   validate: async () => true,
   handler: async () => {
-    if (tokenStreamProviderInstance) {
+    if (tokenMigrationProviderInstance) {
       elizaLogger.info("[Token Prediction Plugin] Stopping prediction stream...");
-      tokenStreamProviderInstance.disconnect();
-      tokenStreamProviderInstance = undefined;
+      tokenMigrationProviderInstance.disconnect();
+      tokenMigrationProviderInstance = undefined;
       elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
     } else {
       elizaLogger.warn("Prediction stream is not running");
@@ -110,9 +110,9 @@ export const tokenPredictionPlugin: Plugin = {
 
 // Cleanup on process exit
 process.on("SIGTERM", () => {
-  if (tokenStreamProviderInstance) {
+  if (tokenMigrationProviderInstance) {
     elizaLogger.info("[Token Prediction Plugin] Cleaning up on process exit...");
-    tokenStreamProviderInstance.disconnect();
+    tokenMigrationProviderInstance.disconnect();
     elizaLogger.success("[Token Prediction Plugin] Cleanup complete");
   }
 });

@@ -2,7 +2,7 @@
     "name": "@ai16z/plugin-token-prediction",
     "version": "0.1.0",
     "main": "dist/index.js",
-    "type": "module",
+    "type": "commonjs",
     "types": "dist/index.d.ts",
     "exports": {
         ".": {
@@ -19,8 +19,8 @@
         "typescript": "^5.0.0"
     },
     "scripts": {
-        "build": "tsup src/index.ts --format esm --dts --target=esnext",
-        "dev": "tsup src/index.ts --format esm --dts --watch --target=esnext",
+        "build": "tsup src/index.ts --format cjs --dts --target=node16",
+        "dev": "tsup src/index.ts --format cjs --dts --watch --target=node16",
         "lint": "eslint . --fix"
     }
 }

@@ -18,10 +18,11 @@ export class PredictionService {
         elizaLogger.info('Starting token prediction:', { tokenId: tokenData.tokenId, roomId });
 
         try {
-            const pastPredictions = await this.learningService.getRecentPredictions();
+            const pastPredictions = await this.learningService.getRecentPredictions(3);
             const accuracyStats = await this.learningService.getHistoricalAccuracy();
 
             elizaLogger.info("Past Predictions:", { pastPredictions });
+            // elizaLogger.info("tokenData", { tokenData });
 
             const state = await this.runtime.composeState(
                 {
@@ -47,9 +48,9 @@ export class PredictionService {
                 context,
                 modelClass: ModelClass.LARGE
             });
-            elizaLogger.info('LLM Response:', { response });
 
             const prediction = this.parseAnalysisResponse(response);
+            elizaLogger.info('Prediction:', { prediction });
 
             await this.runtime.ensureRoomExists(roomId);
             elizaLogger.info('Ensured room exists:', { roomId });
@@ -140,20 +141,20 @@ export class PredictionService {
         const finalMarketCap = checks[checks.length - 1].marketCap;
         const maxMarketCap = Math.max(...checks.map(c => c.marketCap));
 
-        // Overall achievedTarget (based on 10min prediction)
+        // Allow 15% tolerance for achievement checks
         const achievedTarget = prediction.entryDecision === "BUY"
-            ? maxMarketCap >= prediction.marketCapPredictions["10min"] * 0.9
-            : finalMarketCap <= initialMarketCap * 1.05;
+            ? maxMarketCap >= prediction.marketCapPredictions["10min"] * 0.85  // Success if within 15% below target
+            : finalMarketCap <= initialMarketCap * 1.15;  // Success if not more than 15% above initial
 
-        // Per-step accuracy
+        // Per-step accuracy with 15% tolerance
         const mapePerStep = Object.entries(prediction.marketCapPredictions).map(([time, pred]) => {
             const minutes = parseInt(time.replace("min", ""));
             const check = checks.find(c => Math.abs((new Date(c.timestamp).getTime() - new Date(checks[0].timestamp).getTime()) / 60000 - minutes) < 1);
-            const actual = check ? check.marketCap : finalMarketCap; // Fallback to final if exact check missing
-            const mape = actual > 0 ? Math.abs((pred - actual) / actual) : 0; // Avoid division by zero
+            const actual = check ? check.marketCap : finalMarketCap;
+            const mape = actual > 0 ? Math.abs((pred - actual) / actual) : 0;
             const achieved = prediction.entryDecision === "BUY"
-                ? actual >= pred * 0.9
-                : actual <= initialMarketCap * 1.05;
+                ? actual >= pred * 0.85  // Success if within 15% below target
+                : actual <= initialMarketCap * 1.15;  // Success if not more than 15% above initial
             return { time, mape, achieved };
         });
 

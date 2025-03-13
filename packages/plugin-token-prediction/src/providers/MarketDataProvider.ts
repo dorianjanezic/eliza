@@ -78,13 +78,13 @@ export class MarketDataProvider {
                 throw new Error('Invalid response from Birdeye API');
             }
 
-            elizaLogger.success('Successfully fetched token data:', { tokenAddress, marketCap: data.data.marketCap });
+            // elizaLogger.success('Successfully fetched token data:', { tokenAddress, marketCap: data.data.marketCap });
             return {
                 price: data.data.price,
                 marketCap: data.data.marketCap,
                 holderCount: data.data.holder,
-                volume1h: data.data.v1h,
-                volume24h: data.data.v24h,
+                volume1hUSD: data.data.v1hUSD,
+                volume24hUSD: data.data.v24hUSD,
                 priceChange1h: data.data.priceChange1hPercent,
                 priceChange24h: data.data.priceChange24hPercent,
                 uniqueTraders1h: data.data.uniqueWallet1h,
