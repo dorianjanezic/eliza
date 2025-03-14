@@ -12,7 +12,10 @@
     },
     "dependencies": {
         "@ai16z/eliza": "workspace:*",
-        "ws": "^8.13.0"
+        "ws": "^8.13.0",
+        "axios": "^1.6.0",
+        "@ai16z/client-twitter": "workspace:*",
+        "agent-twitter-client": "0.0.16"
     },
     "devDependencies": {
         "tsup": "8.3.5",

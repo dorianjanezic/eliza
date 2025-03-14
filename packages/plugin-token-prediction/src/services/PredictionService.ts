@@ -3,7 +3,6 @@ import type { TokenData, TokenPrediction, PredictionMemory, PredictionCheck } fr
 import predictionTemplate from '../templates/prediction';
 import { LearningService } from './LearningService';
 import { MarketDataProvider } from '../providers/MarketDataProvider';
-
 export class PredictionService {
     private learningService: LearningService;
     private marketDataProvider: MarketDataProvider;
@@ -13,16 +12,15 @@ export class PredictionService {
         this.marketDataProvider = new MarketDataProvider(runtime);
     }
 
-    async predictToken(tokenData: TokenData): Promise<TokenPrediction> {
+    async predictToken(tokenData: TokenData, tweets: string): Promise<TokenPrediction> {
         const roomId = stringToUuid(`token-${tokenData.tokenId}`);
-        elizaLogger.info('Starting token prediction:', { tokenId: tokenData.tokenId, roomId });
+        elizaLogger.info('Starting token prediction:', { tokenAddress: tokenData.address, roomId });
 
         try {
             const pastPredictions = await this.learningService.getRecentPredictions(3);
             const accuracyStats = await this.learningService.getHistoricalAccuracy();
 
             elizaLogger.info("Past Predictions:", { pastPredictions });
-            // elizaLogger.info("tokenData", { tokenData });
 
             const state = await this.runtime.composeState(
                 {
@@ -33,6 +31,7 @@ export class PredictionService {
                 },
                 {
                     tokenData: JSON.stringify(tokenData, null, 2),
+                    tweets,
                     pastPredictions,
                     historicalAccuracy: accuracyStats.percentage.toFixed(2),
                     predictionCount: accuracyStats.count,
@@ -61,7 +60,7 @@ export class PredictionService {
                 agentId: this.runtime.agentId,
                 roomId,
                 content: {
-                    text: `Token Prediction\nToken: ${tokenData.tokenId}\nDecision: ${prediction.entryDecision}`,
+                    text: `Token Prediction\nToken: ${tokenData.address}\nDecision: ${prediction.entryDecision}`,
                     metadata: { analysis: { token_details: { address: tokenData.address }, prediction }, originalToken: tokenData }
                 },
                 createdAt: Date.now()
@@ -73,7 +72,7 @@ export class PredictionService {
             await this.scheduleChecks(tokenData.tokenId, roomId, tokenData.address, prediction);
 
             elizaLogger.success('Token prediction completed:', {
-                tokenId: tokenData.tokenId,
+                tokenAddress: tokenData.address,
                 decision: prediction.entryDecision,
                 confidence: prediction.confidence
             });
@@ -118,14 +117,14 @@ export class PredictionService {
                         await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(checkMemory), true);
 
                         checks.push(check);
-                        elizaLogger.info('Scheduled check recorded:', { tokenId, checkNumber: i, marketCap: marketData.marketCap });
+                        elizaLogger.info('Scheduled check recorded:', { tokenAddress, checkNumber: i, marketCap: marketData.marketCap });
 
                         if (i === numChecks) {
                             await this.createTokenSummary(tokenId, roomId, prediction, checks);
                         }
                     } catch (error) {
                         elizaLogger.error('Failed to execute scheduled check:', {
-                            tokenId,
+                            tokenAddress,
                             checkNumber: i,
                             error: error instanceof Error ? error.message : 'Unknown error'
                         });

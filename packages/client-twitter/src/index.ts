@@ -42,4 +42,6 @@ export const TwitterClientInterface: Client = {
     },
 };
 
+export { TwitterSearchClient };
+
 export default TwitterClientInterface;

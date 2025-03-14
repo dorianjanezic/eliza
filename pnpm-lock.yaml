@@ -156,6 +156,9 @@ importers:
       '@ai16z/plugin-starknet':
         specifier: workspace:*
         version: link:../packages/plugin-starknet
+      '@ai16z/plugin-supabase':
+        specifier: workspace:*
+        version: link:../packages/plugin-supabase
       '@ai16z/plugin-tee':
         specifier: workspace:*
         version: link:../packages/plugin-tee
@@ -446,6 +449,9 @@ importers:
       '@ai16z/plugin-image-generation':
         specifier: workspace:*
         version: link:../plugin-image-generation
+      '@ai16z/plugin-token-prediction':
+        specifier: workspace:*
+        version: link:../plugin-token-prediction
       '@types/body-parser':
         specifier: 1.19.5
         version: 1.19.5
@@ -1259,9 +1265,18 @@ importers:
 
   packages/plugin-token-prediction:
     dependencies:
+      '@ai16z/client-twitter':
+        specifier: workspace:*
+        version: link:../client-twitter
       '@ai16z/eliza':
         specifier: workspace:*
         version: link:../core
+      agent-twitter-client:
+        specifier: 0.0.16
+        version: 0.0.16
+      axios:
+        specifier: ^1.6.0
+        version: 1.7.8(debug@4.4.0)
       ws:
         specifier: ^8.13.0
         version: 8.18.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)

@@ -84,7 +84,9 @@ export class LearningService {
                         - Actual Final: ${results?.finalMarketCap ?? 'N/A'}
                         - Achieved Target: ${results?.achievedTarget ? "Yes" : "No"}
                         - MAPE: ${results?.mape ? (results.mape * 100).toFixed(2) : 'N/A'}%
-                        - Per-step Results:\n${perStepResults}`;
+                        - Per-step Results:\n${perStepResults}
+                        - Risk Factors: ${prediction.riskFactors.join(', ')}
+                        - Supporting Factors: ${prediction.supportingFactors.join(', ')}`
             }).join("\n\n");
         } catch (error) {
             elizaLogger.error("Failed to get recent predictions:", error);
@@ -94,29 +96,47 @@ export class LearningService {
 
     async getHistoricalAccuracy(): Promise<{ percentage: number; count: number; avgMape: number }> {
         try {
-          const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
-            roomIds: [this.globalSummaryRoomId]
-          });
-          elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
+            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
+                roomIds: [this.globalSummaryRoomId]
+            });
+            elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
 
-          if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 };
+            if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 };
 
-          const results = memories.map(m => m.content.metadata as PredictionResult);
-          const correctPredictions = results.filter(r => r.results.achievedTarget).length;
-          const percentage = results.length > 0 ? (correctPredictions / results.length) * 100 : 0;
-          const avgMape = results.length > 0 ? results.reduce((sum, r) => sum + (r.results.mape || 0), 0) / results.length : 0;
+            const results = memories.map(m => m.content.metadata as PredictionResult);
+            const correctPredictions = results.filter(r => r.results.achievedTarget).length;
+            const percentage = results.length > 0 ? (correctPredictions / results.length) * 100 : 0;
+            const avgMape = results.length > 0 ? results.reduce((sum, r) => sum + (r.results.mape || 0), 0) / results.length : 0;
 
-          elizaLogger.info("Historical accuracy calculated:", {
-            total: results.length,
-            correct: correctPredictions,
-            percentage: percentage.toFixed(2),
-            avgMape: avgMape.toFixed(4)
-          });
+            // Calculate average MAPE per time step
+            const mapeByStep: { [key: string]: number[] } = {};
+            results.forEach(r => {
+                r.results.mapePerStep?.forEach(step => {
+                    if (!mapeByStep[step.time]) mapeByStep[step.time] = [];
+                    mapeByStep[step.time].push(step.mape);
+                });
+            });
 
-          return { percentage, count: results.length, avgMape };
+            // Calculate and log averages
+            const avgMapeByStep = Object.entries(mapeByStep).map(([time, mapes]) => ({
+                time,
+                avgMape: mapes.reduce((sum, mape) => sum + mape, 0) / mapes.length
+            }));
+
+            elizaLogger.info("Historical accuracy calculated:", {
+                total: results.length,
+                correct: correctPredictions,
+                percentage: percentage.toFixed(2),
+                avgMape: avgMape.toFixed(4),
+                avgMapeByStep: avgMapeByStep.map(s =>
+                    `${s.time}: ${(s.avgMape * 100).toFixed(2)}%`
+                )
+            });
+
+            return { percentage, count: results.length, avgMape };
         } catch (error) {
-          elizaLogger.error("Failed to calculate historical accuracy:", error);
-          return { percentage: 0, count: 0, avgMape: 0 };
+            elizaLogger.error("Failed to calculate historical accuracy:", error);
+            return { percentage: 0, count: 0, avgMape: 0 };
         }
-      }
+    }
 }

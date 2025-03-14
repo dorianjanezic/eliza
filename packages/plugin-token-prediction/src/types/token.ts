@@ -4,19 +4,19 @@ export interface TokenData {
     symbol: string;
     name: string;
     marketCap: number;
-    bundleData: {
+    bundleData?: {
         totalBundles: number;
         totalSolSpent: number;
         currentHeldPercentage: number;
         totalBundledPercentage: number;
         bonded: boolean;
     };
-    creatorRiskProfile: {
+    creatorRiskProfile?: {
         totalCreated: number;
         currentTokenHeldPercent: number;
         devWarnings: string[];
     };
-    distribution: {
+    distribution?: {
         holderCount: number;
         topHolderPercent: number;
         topHolders: Array<{

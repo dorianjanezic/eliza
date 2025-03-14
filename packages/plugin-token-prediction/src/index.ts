@@ -1,45 +1,49 @@
 import { Plugin, IAgentRuntime, Action } from "@ai16z/eliza";
 import { elizaLogger } from "@ai16z/eliza";
 import { TokenMigrationProvider, MarketDataProvider } from "./providers";
+import { TwitterSentimentProvider } from "./providers/TwitterSentimentProvider";
 import { PredictionService, LearningService } from "./services";
 import * as types from "./types";
 
-// Global reference for cleanup
 let tokenMigrationProviderInstance: TokenMigrationProvider | undefined;
+let twitterSentimentProviderInstance: TwitterSentimentProvider | undefined;
 
-const startPredictionStream: Action = {
+export const startPredictionStream: Action = {
   name: "startPredictionStream",
   description: "Starts the token prediction stream automatically on agent startup",
   similes: [],
   examples: [],
   validate: async () => true,
   handler: async (runtime: IAgentRuntime) => {
-    // TokenMigrationProvider doesn’t require SUPABASE_URL or SUPABASE_ANON_KEY, so we remove this check
     elizaLogger.info("[Token Prediction Plugin] Initializing on agent start...");
 
     const marketDataProvider = new MarketDataProvider(runtime);
     const predictionService = new PredictionService(runtime);
     const learningService = new LearningService(runtime);
     tokenMigrationProviderInstance = new TokenMigrationProvider(runtime);
+    twitterSentimentProviderInstance = new TwitterSentimentProvider(runtime);
+
+    try {
+      await twitterSentimentProviderInstance.initialize();
+    } catch (error) {
+      elizaLogger.warn("Failed to initialize TwitterSentimentProvider, proceeding without tweets:", {
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
 
     tokenMigrationProviderInstance.on("tokenUpdate", async (tokenData: types.TokenData) => {
       try {
         elizaLogger.info("Processing token update:", {
           tokenId: tokenData.tokenId,
           address: tokenData.address,
-        //   bundleData: tokenData.bundleData,
-        //   creatorRiskProfile: tokenData.creatorRiskProfile,
-        //   distribution: tokenData.distribution,
         });
 
         let marketData;
         try {
           marketData = await marketDataProvider.getTokenMarketData(tokenData.address);
           elizaLogger.info("Fetched market data:", {
-            tokenId: tokenData.tokenId,
+            tokenAddress: tokenData.address,
             marketCap: marketData.marketCap,
-            volume1hUSD: marketData.volume1hUSD,
-            uniqueTraders1h: marketData.uniqueTraders1h,
           });
         } catch (apiError) {
           elizaLogger.warn("Failed to fetch market data, using fallback:", {
@@ -51,14 +55,20 @@ const startPredictionStream: Action = {
 
         const enrichedTokenData = {
           ...tokenData,
-          marketCap: marketData.marketCap,
-          volume1hUSD: marketData.volume1hUSD,
-          uniqueTraders1h: marketData.uniqueTraders1h,
-          holders: marketData.holderCount,
+          marketCap: marketData.marketCap || 0,
+          volume1hUSD: marketData.volume1hUSD || 0,
+          uniqueTraders1h: marketData.uniqueTraders1h || 0,
+          holders: marketData.holderCount || 0,
         };
 
-        // elizaLogger.info("Enriched token data:", { enrichedTokenData });
-        await predictionService.predictToken(enrichedTokenData);
+        let tweets: string = "No recent tweets available.";
+        if (twitterSentimentProviderInstance) {
+          tweets = await twitterSentimentProviderInstance.getRecentTweetsForToken(tokenData);
+        } else {
+          elizaLogger.warn("TwitterSentimentProvider not available");
+        }
+
+        await predictionService.predictToken(enrichedTokenData, tweets);
       } catch (error) {
         elizaLogger.error("Failed to process token update:", {
           tokenId: tokenData.tokenId,
@@ -70,21 +80,24 @@ const startPredictionStream: Action = {
     tokenMigrationProviderInstance.connect();
     elizaLogger.success("[Token Prediction Plugin] Initialized and stream started successfully");
 
-    // Return cleanup function
     return {
       cleanup: async () => {
         if (tokenMigrationProviderInstance) {
-          elizaLogger.info("[Token Prediction Plugin] Stopping prediction stream...");
+          elizaLogger.info("[Token Prediction Plugin] Stopping migration stream...");
           tokenMigrationProviderInstance.disconnect();
           tokenMigrationProviderInstance = undefined;
-          elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
         }
+        if (twitterSentimentProviderInstance) {
+          elizaLogger.info("[Token Prediction Plugin] Stopping Twitter sentiment provider...");
+          twitterSentimentProviderInstance = undefined;
+        }
+        elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
       },
     };
   },
 };
 
-const stopPredictionStream: Action = {
+export const stopPredictionStream: Action = {
   name: "stopPredictionStream",
   description: "Stops the token prediction stream",
   similes: [],
@@ -92,13 +105,15 @@ const stopPredictionStream: Action = {
   validate: async () => true,
   handler: async () => {
     if (tokenMigrationProviderInstance) {
-      elizaLogger.info("[Token Prediction Plugin] Stopping prediction stream...");
+      elizaLogger.info("[Token Prediction Plugin] Stopping migration stream...");
       tokenMigrationProviderInstance.disconnect();
       tokenMigrationProviderInstance = undefined;
-      elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
-    } else {
-      elizaLogger.warn("Prediction stream is not running");
     }
+    if (twitterSentimentProviderInstance) {
+      elizaLogger.info("[Token Prediction Plugin] Stopping Twitter sentiment provider...");
+      twitterSentimentProviderInstance = undefined;
+    }
+    elizaLogger.success("[Token Prediction Plugin] Prediction stream stopped successfully");
   },
 };
 
@@ -108,11 +123,20 @@ export const tokenPredictionPlugin: Plugin = {
   actions: [startPredictionStream, stopPredictionStream],
 };
 
-// Cleanup on process exit
 process.on("SIGTERM", () => {
   if (tokenMigrationProviderInstance) {
-    elizaLogger.info("[Token Prediction Plugin] Cleaning up on process exit...");
+    elizaLogger.info("[Token Prediction Plugin] Cleaning up migration stream on process exit...");
     tokenMigrationProviderInstance.disconnect();
-    elizaLogger.success("[Token Prediction Plugin] Cleanup complete");
+    tokenMigrationProviderInstance = undefined;
   }
+  if (twitterSentimentProviderInstance) {
+    elizaLogger.info("[Token Prediction Plugin] Cleaning up Twitter sentiment provider on process exit...");
+    twitterSentimentProviderInstance = undefined;
+  }
+  elizaLogger.success("[Token Prediction Plugin] Cleanup complete");
 });
+
+export { PredictionService } from './services/PredictionService';
+export { TokenData, TokenPrediction } from './types';
+export { TwitterSentimentProvider } from './providers/TwitterSentimentProvider';
+export { MarketDataProvider } from './providers/MarketDataProvider';
