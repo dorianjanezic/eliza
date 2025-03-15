@@ -1,5 +1,5 @@
 import { elizaLogger, type IAgentRuntime } from '@ai16z/eliza';
-import type { MarketData } from '../types';
+import type { MarketData, OHLCVData } from '../types';
 
 export class MarketDataProvider {
     private baseUrl: string;
@@ -48,6 +48,69 @@ export class MarketDataProvider {
         }
     }
 
+    async getTokenOHLCVData(
+        tokenAddress: string,
+        timeframe: '1m' | '5m' | '15m' | '1h' | '4h' | '1d',
+        timeFrom: number,
+        timeTo: number
+    ): Promise<OHLCVData[]> {
+        elizaLogger.info('Fetching OHLCV data from Birdeye:', { tokenAddress, timeframe, timeFrom, timeTo });
+        try {
+            const params = new URLSearchParams({
+                address: tokenAddress,
+                type: timeframe,
+                currency: 'usd',
+                time_from: timeFrom.toString(),
+                time_to: timeTo.toString(),
+            });
+            const url = `${this.baseUrl}/defi/ohlcv?${params.toString()}`;
+            const options: RequestInit = {
+                method: 'GET',
+                headers: {
+                    accept: 'application/json',
+                    'x-chain': 'solana',
+                    'X-API-KEY': this.apiKey,
+                },
+            };
+
+            const response = await this.fetchWithRetry(url, options);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            }
+
+            const data = await response.json();
+            if (!data.success || !data.data || !Array.isArray(data.data.items)) {
+                throw new Error('Invalid OHLCV response from Birdeye API');
+            }
+
+            const ohlcvData: OHLCVData[] = data.data.items.map((item: any) => ({
+                timestamp: item.unixTime,
+                open: item.o,
+                high: item.h,
+                low: item.l,
+                close: item.c,
+                volume: item.v,
+            }));
+
+            elizaLogger.info('Successfully fetched OHLCV data:', {
+                tokenAddress,
+                candleCount: ohlcvData.length,
+                latestClose: ohlcvData[ohlcvData.length - 1]?.close,
+            });
+            return ohlcvData;
+        } catch (error) {
+            elizaLogger.error('Birdeye OHLCV API error:', {
+                tokenAddress,
+                timeframe,
+                timeFrom,
+                timeTo,
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            throw error;
+        }
+    }
+
     async getTokenMarketData(tokenAddress: string): Promise<MarketData> {
         elizaLogger.info('Fetching token data from Birdeye:', { tokenAddress });
         try {
@@ -81,6 +144,7 @@ export class MarketDataProvider {
             // elizaLogger.success('Successfully fetched token data:', { tokenAddress, marketCap: data.data.marketCap });
             return {
                 price: data.data.price,
+                symbol: data.data.symbol,
                 marketCap: data.data.marketCap,
                 holderCount: data.data.holder,
                 volume1hUSD: data.data.v1hUSD,

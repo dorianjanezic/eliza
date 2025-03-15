@@ -1,5 +1,5 @@
 import { elizaLogger, type IAgentRuntime, ModelClass, generateText, composeContext, stringToUuid, type UUID } from '@ai16z/eliza';
-import type { TokenData, TokenPrediction, PredictionMemory, PredictionCheck } from '../types';
+import type { TokenData, TokenPrediction, PredictionMemory, PredictionCheck, OHLCVData } from '../types';
 import predictionTemplate from '../templates/prediction';
 import { LearningService } from './LearningService';
 import { MarketDataProvider } from '../providers/MarketDataProvider';
@@ -12,7 +12,7 @@ export class PredictionService {
         this.marketDataProvider = new MarketDataProvider(runtime);
     }
 
-    async predictToken(tokenData: TokenData, tweets: string): Promise<TokenPrediction> {
+    async predictToken(tokenData: TokenData, tweets: string, ohlcvData: OHLCVData[]): Promise<TokenPrediction> {
         const roomId = stringToUuid(`token-${tokenData.tokenId}`);
         elizaLogger.info('Starting token prediction:', { tokenAddress: tokenData.address, roomId });
 
@@ -32,6 +32,7 @@ export class PredictionService {
                 {
                     tokenData: JSON.stringify(tokenData, null, 2),
                     tweets,
+                    ohlcv: JSON.stringify(ohlcvData, null, 2),
                     pastPredictions,
                     historicalAccuracy: accuracyStats.percentage.toFixed(2),
                     predictionCount: accuracyStats.count,

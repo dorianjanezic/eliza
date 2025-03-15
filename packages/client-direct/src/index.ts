@@ -7,6 +7,7 @@ import { composeContext } from "@ai16z/eliza";
 import { generateMessageResponse } from "@ai16z/eliza";
 import { messageCompletionFooter } from "@ai16z/eliza";
 import { AgentRuntime } from "@ai16z/eliza";
+
 import {
     Content,
     Memory,

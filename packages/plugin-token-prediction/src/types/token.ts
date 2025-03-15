@@ -4,6 +4,7 @@ export interface TokenData {
     symbol: string;
     name: string;
     marketCap: number;
+    price?: number;
     bundleData?: {
         totalBundles: number;
         totalSolSpent: number;
@@ -25,13 +26,13 @@ export interface TokenData {
             percentage: number;
         }>;
         suspiciousDistribution: boolean;
-    };
+   };
 }
-
 
 export interface MarketData {
     price?: number;
     marketCap: number;
+    symbol: string;
     holderCount?: number; // Birdeye: holder
     volume1hUSD?: number; // Birdeye: v1h
     volume24hUSD?: number; // Birdeye: v24h
@@ -39,6 +40,15 @@ export interface MarketData {
     priceChange24h?: number; // Birdeye: priceChange24hPercent
     uniqueTraders1h?: number; // Birdeye: uniqueWallet1h
     trades1h?: number; // Birdeye: trade1h
+}
+
+export interface OHLCVData {
+    timestamp: number; // Unix timestamp in seconds
+    open: number;      // Opening price in USD
+    high: number;      // Highest price in USD
+    low: number;       // Lowest price in USD
+    close: number;     // Closing price in USD
+    volume: number;    // Trading volume in USD
 }
 
 export interface TokenUpdateEvent {
