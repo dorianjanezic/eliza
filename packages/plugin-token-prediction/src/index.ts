@@ -264,8 +264,8 @@ export const predictToken: Action = {
                 `Decision: ${prediction.entryDecision}`,
                 `Confidence: ${(prediction.confidence * 100).toFixed(2)}%`,
                 `Market Cap Predictions:`,
-                ...Object.entries(prediction.marketCapPredictions).map(([time, value]) =>
-                    `  - ${time}: $${value.toLocaleString()}`),
+                ...Object.entries(prediction.marketCapPredictions).map(([time, value]) => `  - ${time}: $${value.toLocaleString()}`),
+                `Reasoning: ${prediction.reasoning}`,
                 `Supporting Factors: ${prediction.supportingFactors.join(", ") || "None"}`,
                 `Risk Factors: ${prediction.riskFactors.join(", ") || "None"}`,
                 `Note: Checks scheduled every 2 minutes for the next 10 minutes.`

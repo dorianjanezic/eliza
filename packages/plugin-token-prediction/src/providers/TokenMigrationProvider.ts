@@ -48,7 +48,7 @@ export class TokenMigrationProvider extends EventEmitter {
         // elizaLogger.info(`Trench API Response Time: ${responseTime}ms (Avg: ${avgResponseTime.toFixed(0)}ms)`);
     }
 
-    private async analyzeMintAddress(mintAddress: string): Promise<TrenchBundleResponse> {
+    public async analyzeMintAddress(mintAddress: string): Promise<TrenchBundleResponse> {
         const startTime = Date.now();
         try {
             // elizaLogger.info(`Starting bundle analysis for mint address: ${mintAddress}`);
@@ -68,7 +68,7 @@ export class TokenMigrationProvider extends EventEmitter {
         }
     }
 
-    private async checkTokenDistribution(tokenAddress: string): Promise<{
+    public async checkTokenDistribution(tokenAddress: string): Promise<{
         holderCount: number;
         topHolderPercent: number;
         topHolders: Array<{ address: string; amount: number; percentage: number }>;
@@ -212,7 +212,6 @@ export class TokenMigrationProvider extends EventEmitter {
                         devWarnings: [],
                     },
                     distribution: {
-                        holderCount: distribution.holderCount,
                         topHolderPercent: distribution.topHolderPercent,
                         topHolders: distribution.topHolders,
                         suspiciousDistribution: distribution.suspiciousDistribution,

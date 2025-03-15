@@ -1,5 +1,5 @@
 import type { UUID } from '@ai16z/eliza';
-import type { TokenData, TokenPrediction } from './index';
+import type { OHLCVData, TokenData, TokenPrediction } from './index';
 
 export interface PredictionMemory {
     id: UUID;
@@ -18,6 +18,8 @@ export interface PredictionMemory {
                 [key: string]: any;
             };
             originalToken: TokenData;
+            tweets?: string;
+            ohlcvData?: OHLCVData[];
             [key: string]: any;
         };
     };

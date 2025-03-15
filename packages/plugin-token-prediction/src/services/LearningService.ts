@@ -34,45 +34,39 @@ export class LearningService {
 
     async recordPredictionSummary(tokenId: string, summary: PredictionResult): Promise<void> {
         try {
-          const memory = {
-            id: stringToUuid(`global-summary-${tokenId}`),
-            userId: this.runtime.agentId,
-            agentId: this.runtime.agentId,
-            roomId: this.globalSummaryRoomId,
-            content: {
-              text: `Prediction Summary for ${tokenId}\nDecision: ${summary.prediction.entryDecision}\nAchieved: ${summary.results.achievedTarget}`,
-              metadata: summary
-            },
-            createdAt: Date.now()
-          };
+            const memory = {
+                id: stringToUuid(`global-summary-${tokenId}`),
+                userId: this.runtime.agentId,
+                agentId: this.runtime.agentId,
+                roomId: this.globalSummaryRoomId,
+                content: {
+                    text: `Prediction Summary for ${tokenId}\nDecision: ${summary.prediction.entryDecision}\nAchieved: ${summary.results.achievedTarget}\nReflection: ${summary.reflection}, Lessons Learned: ${summary.lessonsLearned?.join(", ") ?? "None"}`,
+                    metadata: summary
+                },
+                createdAt: Date.now()
+            };
 
-          await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
-          elizaLogger.success("Recorded global prediction summary:", {
-            tokenId,
-            achievedTarget: summary.results.achievedTarget
-          });
-        } catch (error) {
-          elizaLogger.error("Failed to record global summary:", { tokenId, error });
-          throw error;
-        }
-      }
-
-
-      async getRecentPredictions(limit: number = 5): Promise<string> {
-        try {
-            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
-                roomIds: [this.globalSummaryRoomId],
+            await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
+            elizaLogger.success("Recorded global prediction summary:", {
+                tokenId,
+                achievedTarget: summary.results.achievedTarget,
+                reflection: summary.reflection
             });
+        } catch (error) {
+            elizaLogger.error("Failed to record global summary:", { tokenId, error });
+            throw error;
+        }
+    }
 
+
+    async getRecentPredictions(limit: number = 5): Promise<string> {
+        try {
+            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
             if (memories.length === 0) return "No recent predictions available.";
 
-            // Sort memories by createdAt in descending order
-            const sortedMemories = memories.sort((a, b) =>
-                (b.createdAt ?? 0) - (a.createdAt ?? 0)
-            );
-
+            const sortedMemories = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
             return sortedMemories.slice(0, limit).map(m => {
-                const { prediction, results } = m.content.metadata as PredictionResult;
+                const { prediction, results, reflection, lessonsLearned } = m.content.metadata as PredictionResult;
                 const perStepResults = results.mapePerStep?.map(step =>
                     `      ${step.time}: Target ${prediction.marketCapPredictions[step.time as keyof typeof prediction.marketCapPredictions]} ` +
                     `(${step.achieved ? "✓" : "✗"}, MAPE: ${(step.mape * 100).toFixed(2)}%)`
@@ -80,13 +74,16 @@ export class LearningService {
 
                 return `Token Prediction (${new Date(m.createdAt ?? Date.now()).toISOString()}):
                         - Decision: ${prediction.entryDecision}
+                        - Reasoning: ${prediction.reasoning}
                         - Target (10min): ${prediction.marketCapPredictions["10min"]}
                         - Actual Final: ${results?.finalMarketCap ?? 'N/A'}
                         - Achieved Target: ${results?.achievedTarget ? "Yes" : "No"}
                         - MAPE: ${results?.mape ? (results.mape * 100).toFixed(2) : 'N/A'}%
                         - Per-step Results:\n${perStepResults}
+                        - Reflection: ${reflection ?? "No reflection available"}
+                        - Lessons Learned: ${lessonsLearned?.join(", ") ?? "None"}
                         - Risk Factors: ${prediction.riskFactors.join(', ')}
-                        - Supporting Factors: ${prediction.supportingFactors.join(', ')}`
+                        - Supporting Factors: ${prediction.supportingFactors.join(', ')}`;
             }).join("\n\n");
         } catch (error) {
             elizaLogger.error("Failed to get recent predictions:", error);

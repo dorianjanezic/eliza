@@ -18,7 +18,6 @@ export interface TokenData {
         devWarnings: string[];
     };
     distribution?: {
-        holderCount: number;
         topHolderPercent: number;
         topHolders: Array<{
             address: string;
@@ -33,22 +32,22 @@ export interface MarketData {
     price?: number;
     marketCap: number;
     symbol: string;
-    holderCount?: number; // Birdeye: holder
-    volume1hUSD?: number; // Birdeye: v1h
-    volume24hUSD?: number; // Birdeye: v24h
-    priceChange1h?: number; // Birdeye: priceChange1hPercent
-    priceChange24h?: number; // Birdeye: priceChange24hPercent
-    uniqueTraders1h?: number; // Birdeye: uniqueWallet1h
-    trades1h?: number; // Birdeye: trade1h
+    holderCount?: number;
+    volume1hUSD?: number;
+    volume24hUSD?: number;
+    priceChange1h?: number;
+    priceChange24h?: number;
+    uniqueTraders1h?: number;
+    trades1h?: number;
 }
 
 export interface OHLCVData {
-    timestamp: number; // Unix timestamp in seconds
-    open: number;      // Opening price in USD
-    high: number;      // Highest price in USD
-    low: number;       // Lowest price in USD
-    close: number;     // Closing price in USD
-    volume: number;    // Trading volume in USD
+    timestamp: number;
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
 }
 
 export interface TokenUpdateEvent {
