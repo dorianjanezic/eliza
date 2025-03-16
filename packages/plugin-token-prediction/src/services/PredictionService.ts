@@ -5,30 +5,32 @@ import { evaluatePredictionTemplate } from '../templates/evaluatePrediction';
 import { LearningService } from './LearningService';
 import { MarketDataProvider } from '../providers/MarketDataProvider';
 import TokenMigrationProvider from '../providers/TokenMigrationProvider';
-export class PredictionService {
-    private learningService: LearningService;
-    private marketDataProvider: MarketDataProvider;
-    private tokenMigrationProvider: TokenMigrationProvider; // Declared here
 
+// Orchestrates token prediction, monitoring, and evaluation
+export class PredictionService {
+    private learningService: LearningService; // Handles historical data and learning
+    private marketDataProvider: MarketDataProvider; // Fetches market and OHLCV data
+    private tokenMigrationProvider: TokenMigrationProvider; // Analyzes token distribution and bundling
 
     constructor(private runtime: IAgentRuntime) {
+        // Initialize dependencies with runtime
         this.learningService = new LearningService(runtime);
         this.marketDataProvider = new MarketDataProvider(runtime);
         this.tokenMigrationProvider = new TokenMigrationProvider(runtime);
-
-
     }
 
+    // Generates a prediction for a token based on initial data
     async predictToken(tokenData: TokenData, tweets: string, ohlcvData: OHLCVData[]): Promise<TokenPrediction> {
-        const roomId = stringToUuid(`token-${tokenData.tokenId}`);
+        const roomId = stringToUuid(`token-${tokenData.tokenId}`); // Unique room for this token’s data
         elizaLogger.info('Starting token prediction:', { tokenAddress: tokenData.address, roomId });
 
         try {
-            const pastPredictions = await this.learningService.getRecentPredictions(3);
-            const accuracyStats = await this.learningService.getHistoricalAccuracy();
+            const pastPredictions = await this.learningService.getRecentPredictions(3); // Fetch 3 recent predictions
+            const accuracyStats = await this.learningService.getHistoricalAccuracy(); // Get historical accuracy stats
 
             elizaLogger.info("Past Predictions:", { pastPredictions });
 
+            // Prepare state for LLM with token data, tweets, OHLCV, and historical context
             const state = await this.runtime.composeState(
                 {
                     userId: this.runtime.agentId,
@@ -47,21 +49,23 @@ export class PredictionService {
                 }
             );
 
-            const context = composeContext({ state, template: predictionTemplate });
+            const context = composeContext({ state, template: predictionTemplate }); // Combine state with prediction template
             elizaLogger.info('LLM Input Context:', { context });
 
+            // Generate prediction using large model
             const response = await generateText({
                 runtime: this.runtime,
                 context,
                 modelClass: ModelClass.LARGE
             });
 
-            const prediction = this.parseAnalysisResponse(response);
+            const prediction = this.parseAnalysisResponse(response); // Parse LLM response into TokenPrediction
             elizaLogger.info('Prediction:', { prediction });
 
-            await this.runtime.ensureRoomExists(roomId);
+            await this.runtime.ensureRoomExists(roomId); // Ensure room exists for memory storage
             elizaLogger.info('Ensured room exists:', { roomId });
 
+            // Store initial prediction and data in memory
             const predictionMemory: PredictionMemory = {
                 id: stringToUuid(`prediction-${tokenData.tokenId}`),
                 userId: this.runtime.agentId,
@@ -82,6 +86,7 @@ export class PredictionService {
             const memoryWithEmbedding = await this.runtime.messageManager.addEmbeddingToMemory(predictionMemory);
             await this.runtime.messageManager.createMemory(memoryWithEmbedding, true);
 
+            // Schedule monitoring checks
             await this.scheduleChecks(tokenData.tokenId, roomId, tokenData.address, prediction);
 
             elizaLogger.success('Token prediction completed:', {
@@ -100,12 +105,12 @@ export class PredictionService {
         }
     }
 
+    // Schedules periodic checks to monitor token performance
     private async scheduleChecks(tokenId: string, roomId: UUID, tokenAddress: string, prediction: TokenPrediction): Promise<void> {
         const intervalSeconds = 2 * 60;
         const numChecks = 5;
         const startTime = Date.now();
         const checks: PredictionCheck[] = [];
-        const marketCapThreshold = 10000; // $10,000 threshold
 
         for (let i = 1; i <= numChecks; i++) {
             const delaySeconds = i * intervalSeconds;
@@ -117,7 +122,6 @@ export class PredictionService {
                 executeAt,
                 task: async () => {
                     try {
-                        // Refetch data
                         const marketData = await this.marketDataProvider.getTokenMarketData(tokenAddress);
                         const distribution = await this.tokenMigrationProvider.checkTokenDistribution(tokenAddress);
                         const bundleAnalysis = await this.tokenMigrationProvider.analyzeMintAddress(tokenAddress);
@@ -129,7 +133,7 @@ export class PredictionService {
                             marketData,
                             distribution: {
                                 topHolderPercent: distribution.topHolderPercent,
-                                topHolders: distribution.topHolders
+                                topHolders: distribution.topHolders.slice(1) // Should be array of {address, percentage}
                             },
                             bundleData: bundleAnalysis.success && bundleAnalysis.data ? {
                                 totalBundles: Object.values(bundleAnalysis.data.bundles).filter((b: any) => b.holding_amount > 0).length,
@@ -144,26 +148,21 @@ export class PredictionService {
                         elizaLogger.info('Scheduled check recorded:', {
                             tokenAddress,
                             checkNumber: i,
+                            timestamp: check.timestamp,
                             marketCap: marketData.marketCap,
                             holderCount: marketData.holderCount,
+                            volume1hUSD: marketData.volume1hUSD,
                             topHolderPercent: distribution.topHolderPercent,
-                            totalBundles: check.bundleData?.totalBundles,
-                            ohlcvCandleCount: ohlcvData.length
+                            top5Wallets: distribution.topHolders.slice(1, 6).map((h: any) => ({
+                                address: h.address,
+                                percentage: h.percentage
+                            })),
+                            bundleHeldPercentage: check.bundleData?.currentHeldPercentage,
+                            ohlcvLatestPrice: ohlcvData.length > 0 ? ohlcvData[ohlcvData.length - 1].close : 'N/A'
                         });
 
-                        // Early termination if market cap drops below $10,000
-                        if (marketData.marketCap < marketCapThreshold) {
-                            elizaLogger.warn('Market cap below threshold, terminating checks early:', {
-                                tokenAddress,
-                                checkNumber: i,
-                                marketCap: marketData.marketCap,
-                                threshold: marketCapThreshold
-                            });
-                            await this.createTokenSummary(tokenId, roomId, prediction, checks);
-                            return; // Exit the task, preventing further checks
-                        }
-
                         if (i === numChecks) {
+                            elizaLogger.info('All checks completed:', { tokenAddress, checkCount: checks.length });
                             await this.createTokenSummary(tokenId, roomId, prediction, checks);
                         }
                     } catch (error) {
@@ -172,6 +171,10 @@ export class PredictionService {
                             checkNumber: i,
                             error: error instanceof Error ? error.message : 'Unknown error'
                         });
+                        if (i === numChecks) {
+                            elizaLogger.warn('Summarizing with partial data:', { tokenAddress, checkCount: checks.length });
+                            await this.createTokenSummary(tokenId, roomId, prediction, checks);
+                        }
                     }
                 }
             });
@@ -179,6 +182,7 @@ export class PredictionService {
         }
     }
 
+    // Evaluates prediction results using LLM
     private async evaluatePrediction(
         tokenData: TokenData,
         tweets: string,
@@ -189,6 +193,7 @@ export class PredictionService {
         const pastPredictions = await this.learningService.getRecentPredictions(3);
         const accuracyStats = await this.learningService.getHistoricalAccuracy();
 
+        // Prepare state for LLM evaluation
         const state = await this.runtime.composeState(
             {
                 userId: this.runtime.agentId,
@@ -201,7 +206,7 @@ export class PredictionService {
                 tweets,
                 ohlcv: JSON.stringify(ohlcvData, null, 2),
                 initialPrediction: JSON.stringify(prediction, null, 2),
-                actualResults: JSON.stringify(checks, null, 2), // Now includes marketData, distribution, bundleData
+                actualResults: JSON.stringify(checks, null, 2),
                 pastPredictions,
                 historicalAccuracy: accuracyStats.percentage.toFixed(2),
                 predictionCount: accuracyStats.count,
@@ -215,6 +220,7 @@ export class PredictionService {
             modelClass: ModelClass.LARGE
         });
 
+        // Parse LLM response for reflection and lessons
         const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (!codeBlockMatch) throw new Error('Evaluation response missing code block');
 
@@ -225,25 +231,39 @@ export class PredictionService {
         };
     }
 
+    // Creates a summary of prediction results and stores it
     private async createTokenSummary(tokenId: string, roomId: UUID, prediction: TokenPrediction, checks: PredictionCheck[]): Promise<void> {
-        const initialMarketCap = checks[0].marketCap;
-        const finalMarketCap = checks[checks.length - 1].marketCap;
-        const maxMarketCap = Math.max(...checks.map(c => c.marketCap));
+        // Warn if we don’t have all 5 checks
+        if (checks.length !== 5) {
+            elizaLogger.warn('Unexpected number of checks:', { tokenId, checkCount: checks.length });
+        }
 
+        // Calculate key metrics from checks
+        const initialMarketCap = checks[0]?.marketCap || 0;
+        const finalMarketCap = checks[checks.length - 1]?.marketCap || initialMarketCap;
+        const maxMarketCap = checks.length > 0 ? Math.max(...checks.map(c => c.marketCap)) : initialMarketCap;
+
+        // Determine if the prediction target was achieved
         const achievedTarget = prediction.entryDecision === "BUY"
-            ? maxMarketCap >= prediction.marketCapPredictions["10min"] * 0.85
-            : finalMarketCap <= initialMarketCap * 1.15;
+            ? maxMarketCap >= prediction.marketCapPredictions["10min"] * 0.85 // 85% threshold for BUY
+            : finalMarketCap <= initialMarketCap * 1.15; // 115% threshold for IGNORE
 
-        const mapePerStep = Object.entries(prediction.marketCapPredictions).map(([time, pred]) => {
-            const minutes = parseInt(time.replace("min", ""));
-            const check = checks.find(c => Math.abs((new Date(c.timestamp).getTime() - new Date(checks[0].timestamp).getTime()) / 60000 - minutes) < 1);
-            const actual = check ? check.marketCap : finalMarketCap;
+        // Map checks to time steps using index
+        const timeSteps = ["2min", "4min", "6min", "8min", "10min"];
+        const mapePerStep = timeSteps.map((time, index) => {
+            const pred = prediction.marketCapPredictions[time as keyof typeof prediction.marketCapPredictions];
+            const check = checks[index]; // Direct index mapping
+            if (!check) {
+                elizaLogger.warn('Missing check for time step:', { tokenId, time, expectedIndex: index });
+            }
+            const actual = check ? check.marketCap : finalMarketCap; // Fallback to last known value if check missing
             const mape = actual > 0 ? Math.abs((pred - actual) / actual) : 0;
             const achieved = prediction.entryDecision === "BUY" ? actual >= pred * 0.85 : actual <= initialMarketCap * 1.15;
             return { time, mape, achieved };
         });
         const overallMape = mapePerStep.reduce((sum, step) => sum + step.mape, 0) / mapePerStep.length;
 
+        // Fetch initial prediction data from memory
         const predictionId = stringToUuid(`prediction-${tokenId}`);
         const predictionMemory = await this.runtime.messageManager.getMemoryById(predictionId) as PredictionMemory | undefined;
         let tokenData: TokenData;
@@ -262,11 +282,13 @@ export class PredictionService {
             ohlcvData = [];
         }
 
+        // Evaluate prediction with LLM
         const evaluationResult = await this.evaluatePrediction(tokenData, tweets, ohlcvData, prediction, checks);
 
+        // Construct summary object
         const summary = {
             prediction,
-            checks, // Now includes enriched data
+            checks,
             results: {
                 initialMarketCap,
                 finalMarketCap,
@@ -279,16 +301,18 @@ export class PredictionService {
             lessonsLearned: evaluationResult.lessonsLearned
         };
 
+        // Generate human-readable summary text
         const summaryText = [
-            `Summary for ${tokenId}`,
+            `Summary for ${tokenData.address}`,
             `Decision: ${prediction.entryDecision}`,
             `Achieved: ${achievedTarget}`,
             `MAPE: ${(overallMape * 100).toFixed(2)}%`,
-            ...mapePerStep.map(step => `${step.time}: Predicted ${(prediction.marketCapPredictions[step.time as '2min' | '4min' | '6min' | '8min' | '10min']).toFixed(2)}, Actual ${(checks.find(c => Math.abs((new Date(c.timestamp).getTime() - new Date(checks[0].timestamp).getTime()) / 60000 - parseInt(step.time.replace("min", ""))) < 1)?.marketCap || finalMarketCap).toFixed(2)}, MAPE ${(step.mape * 100).toFixed(2)}%, Achieved: ${step.achieved}`),
+            ...mapePerStep.map(step => `${step.time}: Predicted ${(prediction.marketCapPredictions[step.time as '2min' | '4min' | '6min' | '8min' | '10min']).toFixed(2)}, Actual ${(checks[timeSteps.indexOf(step.time)]?.marketCap || finalMarketCap).toFixed(2)}, MAPE ${(step.mape * 100).toFixed(2)}%, Achieved: ${step.achieved}`),
             `Reflection: ${evaluationResult.reflection}`,
             `Lessons Learned: ${evaluationResult.lessonsLearned.join(", ") || "None"}`
         ].join("\n");
 
+        // Store summary in memory
         const summaryMemory = {
             id: stringToUuid(`summary-${tokenId}`),
             userId: this.runtime.agentId,
@@ -304,9 +328,11 @@ export class PredictionService {
         await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(summaryMemory), true);
         elizaLogger.success('Token summary created:', { tokenId, achievedTarget, mape: overallMape, reflection: evaluationResult.reflection });
 
+        // Record in LearningService
         await this.learningService.recordPredictionSummary(tokenId, summary);
     }
 
+    // Parses LLM response into a TokenPrediction object
     private parseAnalysisResponse(response: string): TokenPrediction {
         try {
             const codeBlockMatch = response.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -325,6 +351,7 @@ export class PredictionService {
             };
         } catch (error) {
             elizaLogger.error('Failed to parse analysis response:', { error: error instanceof Error ? error.message : 'Unknown error', response });
+            // Return fallback prediction on parsing failure
             return {
                 entryDecision: "IGNORE",
                 marketCapPredictions: { "2min": 0, "4min": 0, "6min": 0, "8min": 0, "10min": 0 },

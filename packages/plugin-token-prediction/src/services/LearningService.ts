@@ -1,51 +1,60 @@
 import { elizaLogger, type IAgentRuntime, stringToUuid, type UUID } from "@ai16z/eliza";
 import type { PredictionResult, TokenPrediction } from "../types";
 
+// Manages prediction summaries and historical accuracy for token predictions
 export class LearningService {
-    private readonly globalSummaryRoomId: UUID = stringToUuid("token-prediction-summaries");
-    private static initialized = false;
+    private readonly globalSummaryRoomId: UUID = stringToUuid("token-prediction-summaries"); // Unique room ID for storing all summaries
+    private static initialized = false; // Static flag to ensure one-time initialization
 
     constructor(private runtime: IAgentRuntime) {
+        // Initialize global room only once per instance creation
         if (!LearningService.initialized) {
             this.initializeGlobalRoom();
             LearningService.initialized = true;
         }
     }
 
+    // Sets up a global room for storing prediction summaries
     private async initializeGlobalRoom() {
         try {
             try {
+                // Ensure the room exists in Eliza’s memory system
                 await this.runtime.ensureRoomExists(this.globalSummaryRoomId);
                 elizaLogger.info("Created global summary room:", { roomId: this.globalSummaryRoomId });
             } catch (error: any) {
+                // Handle case where room already exists (UNIQUE constraint)
                 if (error?.message?.includes("UNIQUE constraint failed")) {
                     elizaLogger.info("Global summary room already exists:", { roomId: this.globalSummaryRoomId });
                 } else {
-                    throw error;
+                    throw error; // Rethrow unexpected errors
                 }
             }
+            // Ensure the agent is a participant in the room
             await this.runtime.ensureParticipantInRoom(this.runtime.agentId, this.globalSummaryRoomId);
             elizaLogger.success("Initialized global summary room:", { roomId: this.globalSummaryRoomId });
         } catch (error) {
             elizaLogger.error("Failed to initialize global summary room:", error);
-            throw error;
+            throw error; // Propagate error to caller
         }
     }
 
+    // Records a prediction summary in the global room
     async recordPredictionSummary(tokenId: string, summary: PredictionResult): Promise<void> {
         try {
+            // Create memory object with summary details
             const memory = {
-                id: stringToUuid(`global-summary-${tokenId}`),
+                id: stringToUuid(`global-summary-${tokenId}`), // Unique ID for this token’s summary
                 userId: this.runtime.agentId,
                 agentId: this.runtime.agentId,
                 roomId: this.globalSummaryRoomId,
                 content: {
                     text: `Prediction Summary for ${tokenId}\nDecision: ${summary.prediction.entryDecision}\nAchieved: ${summary.results.achievedTarget}\nReflection: ${summary.reflection}, Lessons Learned: ${summary.lessonsLearned?.join(", ") ?? "None"}`,
-                    metadata: summary
+                    metadata: summary // Full PredictionResult stored in metadata
                 },
                 createdAt: Date.now()
             };
 
+            // Add embedding and store in memory
             await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
             elizaLogger.success("Recorded global prediction summary:", {
                 tokenId,
@@ -54,24 +63,28 @@ export class LearningService {
             });
         } catch (error) {
             elizaLogger.error("Failed to record global summary:", { tokenId, error });
-            throw error;
+            throw error; // Let caller handle the failure
         }
     }
 
-
+    // Retrieves a formatted string of recent prediction summaries
     async getRecentPredictions(limit: number = 5): Promise<string> {
         try {
+            // Fetch all memories from the global summary room
             const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
             if (memories.length === 0) return "No recent predictions available.";
 
+            // Sort by creation time (newest first) and take the top `limit`
             const sortedMemories = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
             return sortedMemories.slice(0, limit).map(m => {
                 const { prediction, results, reflection, lessonsLearned } = m.content.metadata as PredictionResult;
+                // Format per-step results for detailed output
                 const perStepResults = results.mapePerStep?.map(step =>
                     `      ${step.time}: Target ${prediction.marketCapPredictions[step.time as keyof typeof prediction.marketCapPredictions]} ` +
                     `(${step.achieved ? "✓" : "✗"}, MAPE: ${(step.mape * 100).toFixed(2)}%)`
                 ).join('\n') ?? '';
 
+                // Construct human-readable summary string
                 return `Token Prediction (${new Date(m.createdAt ?? Date.now()).toISOString()}):
                         - Decision: ${prediction.entryDecision}
                         - Reasoning: ${prediction.reasoning}
@@ -84,28 +97,32 @@ export class LearningService {
                         - Lessons Learned: ${lessonsLearned?.join(", ") ?? "None"}
                         - Risk Factors: ${prediction.riskFactors.join(', ')}
                         - Supporting Factors: ${prediction.supportingFactors.join(', ')}`;
-            }).join("\n\n");
+            }).join("\n\n"); // Separate each prediction with double newline
         } catch (error) {
             elizaLogger.error("Failed to get recent predictions:", error);
-            return "Error retrieving recent predictions.";
+            return "Error retrieving recent predictions."; // Fallback message
         }
     }
 
+    // Calculates historical accuracy and average MAPE from stored summaries
     async getHistoricalAccuracy(): Promise<{ percentage: number; count: number; avgMape: number }> {
         try {
+            // Fetch all memories from the global summary room
             const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
                 roomIds: [this.globalSummaryRoomId]
             });
             elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
 
-            if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 };
+            if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 }; // Default for empty history
 
             const results = memories.map(m => m.content.metadata as PredictionResult);
+            // Count correct predictions (where target was achieved)
             const correctPredictions = results.filter(r => r.results.achievedTarget).length;
             const percentage = results.length > 0 ? (correctPredictions / results.length) * 100 : 0;
+            // Average MAPE across all predictions
             const avgMape = results.length > 0 ? results.reduce((sum, r) => sum + (r.results.mape || 0), 0) / results.length : 0;
 
-            // Calculate average MAPE per time step
+            // Calculate average MAPE per time step for deeper insight
             const mapeByStep: { [key: string]: number[] } = {};
             results.forEach(r => {
                 r.results.mapePerStep?.forEach(step => {
@@ -114,12 +131,12 @@ export class LearningService {
                 });
             });
 
-            // Calculate and log averages
             const avgMapeByStep = Object.entries(mapeByStep).map(([time, mapes]) => ({
                 time,
                 avgMape: mapes.reduce((sum, mape) => sum + mape, 0) / mapes.length
             }));
 
+            // Log detailed stats for monitoring
             elizaLogger.info("Historical accuracy calculated:", {
                 total: results.length,
                 correct: correctPredictions,
@@ -133,7 +150,7 @@ export class LearningService {
             return { percentage, count: results.length, avgMape };
         } catch (error) {
             elizaLogger.error("Failed to calculate historical accuracy:", error);
-            return { percentage: 0, count: 0, avgMape: 0 };
+            return { percentage: 0, count: 0, avgMape: 0 }; // Fallback for errors
         }
     }
 }

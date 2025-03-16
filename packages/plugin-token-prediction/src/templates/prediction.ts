@@ -43,7 +43,7 @@ Historical Accuracy: {{historicalAccuracy}}% (successful predictions over {{pred
 
 ### Guidelines
 1. **Entry Decision**:
-   - **BUY**: Predict growth if momentum is high (volume1hUSD > marketCap, uniqueTraders1h > 200), distribution is healthy (topHolderPercent < 20%), and sentiment is positive.
+   - **BUY**: Predict growth if momentum is high (volume1hUSD > marketCap, uniqueTraders1h > 200), distribution is healthy (topHolderPercent < 20%), and recent twitter activity is positive.
    - **IGNORE**: Predict stagnation/decline if risks dominate (e.g., devWarnings, suspiciousDistribution, OHLCV downtrend).
 
 2. **Market Cap Predictions**:
