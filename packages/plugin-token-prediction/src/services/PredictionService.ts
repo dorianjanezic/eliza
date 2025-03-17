@@ -214,6 +214,7 @@ export class PredictionService {
             }
         );
 
+        elizaLogger.info('LLM Input State Evaluate Prediction:', { state });
         const response = await generateText({
             runtime: this.runtime,
             context: composeContext({ state, template: evaluatePredictionTemplate }),
@@ -243,10 +244,13 @@ export class PredictionService {
         const finalMarketCap = checks[checks.length - 1]?.marketCap || initialMarketCap;
         const maxMarketCap = checks.length > 0 ? Math.max(...checks.map(c => c.marketCap)) : initialMarketCap;
 
+        // Find the maximum predicted market cap across all time steps
+        const maxPredictedMarketCap = Math.max(...Object.values(prediction.marketCapPredictions));
+
         // Determine if the prediction target was achieved
         const achievedTarget = prediction.entryDecision === "BUY"
-            ? maxMarketCap >= prediction.marketCapPredictions["10min"] * 0.85 // 85% threshold for BUY
-            : finalMarketCap <= initialMarketCap * 1.15; // 115% threshold for IGNORE
+            ? maxMarketCap >= maxPredictedMarketCap * 0.90  // Any check hits the max predicted target
+            : finalMarketCap <= initialMarketCap * 1.10; // 115% threshold for IGNORE
 
         // Map checks to time steps using index
         const timeSteps = ["2min", "4min", "6min", "8min", "10min"];
@@ -258,7 +262,7 @@ export class PredictionService {
             }
             const actual = check ? check.marketCap : finalMarketCap; // Fallback to last known value if check missing
             const mape = actual > 0 ? Math.abs((pred - actual) / actual) : 0;
-            const achieved = prediction.entryDecision === "BUY" ? actual >= pred * 0.85 : actual <= initialMarketCap * 1.15;
+            const achieved = prediction.entryDecision === "BUY" ? actual >= pred * 0.90 : actual <= initialMarketCap * 1.10;
             return { time, mape, achieved };
         });
         const overallMape = mapePerStep.reduce((sum, step) => sum + step.mape, 0) / mapePerStep.length;

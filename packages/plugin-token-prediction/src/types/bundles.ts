@@ -18,7 +18,6 @@ export interface BundleInfo {
 export interface TrenchBundleResponse {
     success: boolean;
     data?: {
-        bonded: boolean;
         total_bundles: number;
         total_sol_spent: number;
         total_holding_percentage: number;
