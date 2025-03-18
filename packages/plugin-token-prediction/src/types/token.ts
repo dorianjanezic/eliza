@@ -10,7 +10,6 @@ export interface TokenData {
         totalSolSpent: number;
         currentHeldPercentage: number;
         totalBundledPercentage: number;
-        bonded: boolean;
     };
     creatorRiskProfile?: {
         totalCreated: number;

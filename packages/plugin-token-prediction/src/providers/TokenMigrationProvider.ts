@@ -212,13 +212,11 @@ export class TokenMigrationProvider extends EventEmitter {
                         totalSolSpent: bundleAnalysis.data.total_sol_spent,
                         currentHeldPercentage: bundleAnalysis.data.total_holding_percentage,
                         totalBundledPercentage: bundleAnalysis.data.total_percentage_bundled,
-                        bonded: bundleAnalysis.data.bonded,
                     } : {
                         totalBundles: 0,
                         totalSolSpent: 0,
                         currentHeldPercentage: 0,
                         totalBundledPercentage: 0,
-                        bonded: false,
                     },
                     creatorRiskProfile: bundleAnalysis.success && bundleAnalysis.data ? {
                         totalCreated: bundleAnalysis.data.creator_analysis.history.total_coins_created,
