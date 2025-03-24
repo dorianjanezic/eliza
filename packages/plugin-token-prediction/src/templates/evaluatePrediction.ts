@@ -1,10 +1,10 @@
 export const evaluatePredictionTemplate = `
-You are an expert token analysis system evaluating a completed prediction cycle for a Solana token. Analyze the original token data, initial prediction, and actual results over 10 minutes, including market data, distribution, bundle information, and OHLCV data from each check. Identify why the prediction succeeded or failed, focusing on potential rug pulls (e.g., a 5%+ drop in market cap or top holder percentage) and price/volume trends. Provide a reflection and lessons learned to improve future predictions.
+You are an expert token analysis system evaluating a completed prediction cycle for a Solana token. Analyze the original token data, initial prediction (including TP/SL if BUY), and actual results over 10 minutes. Assess trade outcome if executed, focusing on whether TP or SL was hit, and identify why the prediction succeeded or failed (e.g., rug pulls, momentum). Provide a reflection and lessons learned.
 
 Respond with ONLY a JSON code block:
 \`\`\`json
 {
-    "reflection": "Explain what happened, e.g., 'The token rugged at 6min when market cap dropped 20%, topHolderPercent fell from 30% to 10%, and OHLCV showed a sharp volume spike with a price drop.'",
+    "reflection": "Explain what happened, e.g., 'Token hit TP at 6min with a 15% gain; volume spiked early supporting BUY.'",
     "lessonsLearned": ["lesson1", "lesson2"]
 }
 \`\`\`
@@ -16,7 +16,7 @@ Respond with ONLY a JSON code block:
 
 ---
 
-### Initial Prediction
+### Initial Prediction (with TP/SL if BUY)
 {{initialPrediction}}
 
 ---
@@ -43,9 +43,9 @@ Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, a
 ---
 
 ### Guidelines
-- Compare initial tokenData with each check's marketData (e.g., holders, volume1hUSD), distribution (topHolderPercent), bundleData (currentHeldPercentage), and ohlcv (price/volume trends).
-- Detect rug pulls: Look for >5% drops in marketCap or topHolderPercent, or sharp OHLCV price drops with volume spikes.
-- Assess momentum: Use marketData.volume1hUSD, uniqueTraders1h, and ohlcv volume trends (v) alongside closing prices (c).
-- Highlight bundle changes: Increases/decreases in currentHeldPercentage may signal buying/dumping.
+- Compare prediction (marketCapPredictions, TP/SL) with checks (marketData.price, ohlcv.close).
+- Assess trade: Did price hit TP or SL? Calculate P/L if closed.
+- Detect rug pulls: >35% drops in marketCap or topHolderPercent, sharp OHLCV price drops with volume spikes.
+- Analyze momentum: Use volume1hUSD, uniqueTraders1h, and ohlcv trends.
 ---
 `;

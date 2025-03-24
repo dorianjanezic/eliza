@@ -5,9 +5,11 @@ import { elizaLogger, type IAgentRuntime } from '@ai16z/eliza';
 import { TokenUpdateEvent } from '../types/token';
 import { TrenchBundleResponse, BundleInfo } from '../types/bundles';
 import axios from 'axios';
+import { logger } from '../utils/logger';
 
 // Predefined public keys for Pump.fun liquidity migrator and token metadata program
-const PUMP_LIQUIDITY_MIGRATOR = new PublicKey('39azUYFWPz3VHgKCf3VChUwbpURdCHRxjWVowf5jUJjg');
+const PUMP_BONDING_CURVE_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
+const PUMP_AMM_PROGRAM = new PublicKey('pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA');
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
 
 // Configuration for token distribution validation
@@ -24,16 +26,47 @@ export class TokenMigrationProvider extends EventEmitter {
     private isConnected: boolean = false; // Tracks WebSocket connection status
     private reconnectAttempts: number = 0; // Number of reconnection attempts
     private maxReconnectAttempts: number = 10; // Max reconnection attempts before giving up
-    private TRENCH_API_URL = 'https://trench.bot/api/bundle/bundle_advanced'; // Trench API for bundle analysis
+    private TRENCH_API_URL = 'https://trench.bot/api/bundle/bundle_advanced'; // Trench API URL
     private responseTimeHistory: { timestamp: number; responseTime: number }[] = []; // Tracks API response times
     private readonly MAX_HISTORY_LENGTH = 100; // Limits response time history size
+    private lastReconnectTime: number = 0; // Last time a reconnection was attempted
+    private backoffInterval: number = 1000; // Initial backoff interval in milliseconds
+    // Add a simple cache for Trench API responses
+    private trenchApiCache: Map<string, { data: TrenchBundleResponse, timestamp: number }> = new Map();
+    private readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minute cache TTL
+    // Add ammLogsSubscriptionId property
+    private ammLogsSubscriptionId: number | null = null;
+    private logsSubscriptionId: number | null = null;
+    private heartbeatId: number | null = null;
+    private lastHeartbeatResponse: number = 0;
 
     constructor(private runtime: IAgentRuntime) {
         super();
         // Initialize Solana connection with RPC URL from settings or default
-        const rpcUrl = this.runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
-        this.connection = new Connection(rpcUrl, 'confirmed');
-        this.connect(); // Start WebSocket connection on instantiation
+        const rpcUrl = this.runtime.getSetting('SOLANA_RPC_URL');
+
+        if (!rpcUrl) {
+            elizaLogger.warn(`TokenMigrationProvider: No SOLANA_RPC_URL setting found. Will use default endpoint.`);
+            this.connection = new Connection('https://api.mainnet-beta.solana.com', {
+                commitment: 'confirmed',
+                confirmTransactionInitialTimeout: 60000,
+                wsEndpoint: 'wss://api.mainnet-beta.solana.com'
+            });
+        } else {
+            elizaLogger.info(`TokenMigrationProvider: Using SOLANA_RPC_URL from settings: ${rpcUrl}`);
+            this.connection = new Connection(rpcUrl, {
+                commitment: 'confirmed',
+                confirmTransactionInitialTimeout: 60000,
+                wsEndpoint: rpcUrl.replace('https', 'wss')
+            });
+        }
+
+        logger.api.request('solana_connection_init', {
+            rpcUrl: rpcUrl || 'https://api.mainnet-beta.solana.com',
+            fromSettings: !!rpcUrl
+        });
+
+        // Don't connect automatically in constructor - connection will be initiated when explicitly requested
     }
 
     // Calculates average response time from history
@@ -49,34 +82,106 @@ export class TokenMigrationProvider extends EventEmitter {
         if (this.responseTimeHistory.length > this.MAX_HISTORY_LENGTH) {
             this.responseTimeHistory.shift(); // Remove oldest entry
         }
-        // Uncommented log for debugging response times
-        // const avgResponseTime = this.calculateAverageResponseTime();
-        // elizaLogger.info(`Trench API Response Time: ${responseTime}ms (Avg: ${avgResponseTime.toFixed(0)}ms)`);
-    }
 
-    // Fetches bundle analysis from Trench API for a given mint address
-    public async analyzeMintAddress(mintAddress: string): Promise<TrenchBundleResponse> {
-        const startTime = Date.now();
-        try {
-            // Uncommented log for debugging
-            // elizaLogger.info(`Starting bundle analysis for mint address: ${mintAddress}`);
-            const response = await axios.get(`${this.TRENCH_API_URL}/${mintAddress}`, {
-                headers: { 'Content-Type': 'application/json' },
-            });
-            const responseTime = Date.now() - startTime;
-            this.trackResponseTime(responseTime);
-            return { success: true, data: response.data }; // Successful response with bundle data
-        } catch (error: any) {
-            const responseTime = Date.now() - startTime;
-            this.trackResponseTime(responseTime);
-            elizaLogger.error(`Error analyzing bundle for ${mintAddress}:`, {
-                error: error.response?.data?.message || error.message,
-            });
-            return { success: false, error: error.response?.data?.message || error.message };
+        // Log performance metrics if we have enough data
+        if (this.responseTimeHistory.length > 5) {
+            const avgTime = this.calculateAverageResponseTime();
+            logger.performance.checkpoint('trench_api', 'average_response_time', undefined, avgTime);
         }
     }
 
-    // Analyzes token distribution for suspicious patterns or high concentration
+    // Fetches bundle data for a mint address from Trench API
+    public async analyzeMintAddress(mintAddress: string): Promise<TrenchBundleResponse> {
+        const tokenId = mintAddress.substring(0, 8); // Use part of address as token ID for logging
+
+        // Check if we have a cached response that's still valid
+        const cachedResponse = this.trenchApiCache.get(mintAddress);
+        if (cachedResponse && (Date.now() - cachedResponse.timestamp) < this.CACHE_TTL_MS) {
+            logger.api.response('trench_bundle_analysis_cached', 200, 0);
+            logger.market.received(tokenId, mintAddress, 'bundle_analysis_cached', {
+                bundleCount: cachedResponse.data.success && cachedResponse.data.data ?
+                    Object.keys(cachedResponse.data.data.bundles || {}).length : 0,
+                fromCache: true,
+                cacheAge: Math.round((Date.now() - cachedResponse.timestamp) / 1000) + 's'
+            });
+            return cachedResponse.data;
+        }
+
+        const fullUrl = `${this.TRENCH_API_URL}/${mintAddress}`;
+
+        logger.api.request('trench_bundle_analysis', { mintAddress, url: fullUrl });
+
+        const startTime = Date.now();
+        try {
+            // Updated request with proper headers and GET method (not POST)
+            const response = await axios.get(fullUrl, {
+                headers: {
+                    'Accept': 'application/json'
+                },
+                timeout: 15000 // 15 second timeout
+            });
+
+            const responseTime = Date.now() - startTime;
+            this.trackResponseTime(responseTime);
+
+            // Log successful response
+            logger.api.response('trench_bundle_analysis', response.status, responseTime);
+
+            // Process the response as-is (the API returns the bundle data directly)
+            if (response.data) {
+                const bundleData = response.data;
+
+                // Log key metrics from successful analysis
+                logger.market.received(tokenId, mintAddress, 'bundle_analysis', {
+                    bundleCount: Object.keys(bundleData.bundles || {}).length,
+                    totalSolSpent: bundleData.total_sol_spent,
+                    totalHoldingPercentage: bundleData.total_holding_percentage
+                });
+
+                // Wrap the response to match our expected format
+                const result = {
+                    success: true,
+                    data: bundleData,
+                    error: undefined
+                };
+
+                // Cache the successful response
+                this.trenchApiCache.set(mintAddress, { data: result, timestamp: Date.now() });
+
+                return result;
+            } else {
+                logger.api.error('trench_bundle_analysis', new Error('API returned empty response'));
+                return {
+                    success: false,
+                    data: undefined,
+                    error: 'API returned empty response'
+                };
+            }
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error('Unknown error in Trench API request');
+            logger.api.error('trench_bundle_analysis', err);
+
+            // Continue with plugin operation by providing a default response
+            logger.market.received(tokenId, mintAddress, 'bundle_analysis', {
+                bundleCount: 0,
+                totalSolSpent: 0,
+                totalHoldingPercentage: 0,
+                error: err.message
+            });
+
+            // Cache the error response too to prevent repeated failed calls
+            const errorResult = {
+                success: false,
+                data: undefined,
+                error: err.message
+            };
+            this.trenchApiCache.set(mintAddress, { data: errorResult, timestamp: Date.now() });
+
+            return errorResult;
+        }
+    }
+
+    // Analyzes token holder distribution for legitimacy validation
     public async checkTokenDistribution(tokenAddress: string): Promise<{
         holderCount: number;
         topHolderPercent: number;
@@ -84,174 +189,76 @@ export class TokenMigrationProvider extends EventEmitter {
         suspiciousDistribution: boolean;
         isValid: boolean;
     }> {
+        const tokenId = tokenAddress.substring(0, 8); // Generate token ID for logging
+        logger.market.fetching(tokenId, tokenAddress, 'token_distribution');
+
         try {
-            const tokenPublicKey = new PublicKey(tokenAddress);
-            // Fetch largest token accounts from Solana
-            const accounts = await this.connection.getTokenLargestAccounts(tokenPublicKey);
+            // Fetch largest token holders from Solana RPC (single API call)
+            const largestAccounts = await this.connection.getTokenLargestAccounts(new PublicKey(tokenAddress));
 
-            if (accounts.value.length === 0) {
-                elizaLogger.warn('No token accounts found');
-                return { isValid: false, holderCount: 0, topHolderPercent: 0, topHolders: [], suspiciousDistribution: false };
-            }
+            // Use the data directly from largestAccounts without making additional RPC calls
+            const holders = largestAccounts.value.map((account) => {
+                const amountBN = account.amount;
+                const amountNumber = Number(amountBN) / Math.pow(10, 9); // Assuming 9 decimals for SPL tokens
+                return {
+                    address: account.address.toString(),
+                    amount: amountNumber,
+                    percentage: 0, // Will calculate after getting total supply
+                };
+            });
 
-            const totalSupply = BigInt(1e9 * 1e6); // Assumes 1B tokens with 6 decimals
-            const topHolderAmount = BigInt(accounts.value[1].amount); // Second account (after liquidity pool)
-            const topHolderPercent = Number(topHolderAmount) / Number(totalSupply) * 100;
+            // Calculate total supply from sum of holder amounts
+            const totalSupply = holders.reduce((sum, holder) => sum + holder.amount, 0);
 
-            // Check for suspicious distribution (similar holdings among top accounts)
-            const suspiciousThreshold = 0.03; // 0.03% difference threshold
-            const similarHoldingsThreshold = 10; // Max consecutive similar accounts
-            let consecutiveSimilarCount = 0;
-            let maxConsecutiveSimilar = 0;
+            // Calculate percentage for each holder
+            holders.forEach((holder) => {
+                holder.percentage = (holder.amount / totalSupply) * 100;
+            });
 
-            for (let i = 1; i < Math.min(accounts.value.length, 20); i++) {
-                const currentAmount = BigInt(accounts.value[i].amount);
-                const nextAmount = BigInt(accounts.value[i + 1]?.amount || 0);
-                if (nextAmount === BigInt(0)) continue;
-                const difference = currentAmount > nextAmount ? currentAmount - nextAmount : nextAmount - currentAmount;
-                const percentDiff = Number(difference) / Number(currentAmount) * 100;
-                if (percentDiff < suspiciousThreshold) {
-                    consecutiveSimilarCount++;
-                    maxConsecutiveSimilar = Math.max(maxConsecutiveSimilar, consecutiveSimilarCount);
-                } else {
-                    consecutiveSimilarCount = 0;
-                }
-            }
+            // Sort by percentage (descending)
+            holders.sort((a, b) => b.percentage - a.percentage);
 
-            const suspiciousDistribution = maxConsecutiveSimilar >= similarHoldingsThreshold;
+            // Validate distribution
+            const topHolderPercent = holders[0]?.percentage || 0;
+            const suspiciousDistribution = topHolderPercent > CONFIG.MAX_TOP_HOLDER_PERCENT;
+            const isValid = !suspiciousDistribution;
+
+            // Log distribution analysis results
+            logger.market.received(tokenId, tokenAddress, 'token_distribution', {
+                holderCount: holders.length,
+                topHolderPercent,
+                topHoldersCount: holders.filter(h => h.percentage > 5).length,
+                suspiciousDistribution,
+                isValid
+            });
+
+            // Flag suspicious distribution patterns
             if (suspiciousDistribution) {
-                elizaLogger.warn(`Suspicious token distribution detected: ${maxConsecutiveSimilar + 1} consecutive accounts have very similar holdings`);
+                logger.market.suspicious(tokenId, tokenAddress, 'Suspicious token distribution', {
+                    topHolderPercent,
+                    topHolderAddress: holders[0]?.address
+                });
             }
 
-            // Map top 20 holders to a readable format
-            const topHolders = accounts.value.slice(0, 20).map(account => ({
-                address: account.address.toBase58(),
-                amount: Number(account.amount) / 1e6, // Convert lamports to tokens
-                percentage: (Number(account.amount) * 100) / Number(totalSupply),
-            }));
-
-            // Uncommented detailed logging for distribution
-            elizaLogger.info(`Token distribution for ${tokenAddress}:`);
-            elizaLogger.info(`Total holders: ${accounts.value.length}`);
-            elizaLogger.info(`Top holder percentage: ${topHolderPercent.toFixed(2)}%`);
-            topHolders.forEach((holder, index) => {
-                elizaLogger.info(`  ${index + 1}. ${holder.address}: ${holder.amount.toFixed(6)} (${holder.percentage.toFixed(2)}%)`);
-            });
-
-            const isValid = topHolderPercent <= CONFIG.MAX_TOP_HOLDER_PERCENT && !suspiciousDistribution;
-            if (!isValid && suspiciousDistribution) {
-                elizaLogger.warn('Token distribution appears manipulated with multiple accounts holding similar amounts');
-            }
-
-            return { isValid, holderCount: accounts.value.length, topHolderPercent, topHolders, suspiciousDistribution };
-        } catch (error) {
-            elizaLogger.error('Error checking token distribution:', { error: error instanceof Error ? error.message : 'Unknown error' });
-            return { isValid: false, holderCount: 0, topHolderPercent: 0, topHolders: [], suspiciousDistribution: false };
-        }
-    }
-
-    // Processes Solana transaction logs to detect token migrations
-    private async processMigrationLogs(logs: string[], signature: string): Promise<void> {
-        try {
-            // Look for Pump.fun migration log signature
-            const initialize2Log = logs.find(log => log.includes('Program log: initialize2: InitializeInstruction2'));
-            if (!initialize2Log) return; // Exit if not a migration event
-
-            const tx = await this.connection.getTransaction(signature, { maxSupportedTransactionVersion: 0 });
-            if (!tx || !tx.transaction.message) {
-                elizaLogger.info(`Failed to fetch transaction details for signature: ${signature}`);
-                return;
-            }
-
-            const accountKeys = tx.transaction.message.getAccountKeys();
-            if (accountKeys.length <= 18) {
-                elizaLogger.info(`Insufficient account keys in transaction: ${signature}`);
-                return;
-            }
-
-            const tokenAddress = accountKeys.get(18)?.toString(); // Mint address
-            const liquidityAddress = accountKeys.get(2)?.toString(); // Liquidity pool address
-
-            if (!tokenAddress || !liquidityAddress) {
-                elizaLogger.info('Missing token or liquidity address');
-                return;
-            }
-
-            // Fetch token metadata (name and symbol)
-            let tokenName = 'Unknown';
-            let symbol = 'UNKNOWN';
-            try {
-                const [metadataAddress] = PublicKey.findProgramAddressSync(
-                    [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), new PublicKey(tokenAddress).toBuffer()],
-                    TOKEN_METADATA_PROGRAM_ID
-                );
-                const accountInfo = await this.connection.getAccountInfo(metadataAddress);
-                if (accountInfo?.data) {
-                    const nameLength = accountInfo.data[65];
-                    tokenName = accountInfo.data.slice(66, 66 + nameLength).toString('utf8').replace(/\0/g, '');
-                    symbol = tokenName.slice(0, 6).toUpperCase(); // Derive symbol from name (first 6 chars)
-                }
-            } catch (error) {
-                elizaLogger.error('Error fetching token metadata:', { error: error instanceof Error ? error.message : 'Unknown error' });
-            }
-
-            // Analyze bundling and distribution
-            const bundleAnalysis = await this.analyzeMintAddress(tokenAddress);
-            const distribution = await this.checkTokenDistribution(tokenAddress);
-
-            // Construct token update event
-            const tokenUpdate: TokenUpdateEvent = {
-                tokenData: {
-                    tokenId: signature, // Use transaction signature as unique ID
-                    address: tokenAddress,
-                    symbol,
-                    name: tokenName,
-                    marketCap: 0, // Initial market cap unknown until trading starts
-                    bundleData: bundleAnalysis.success && bundleAnalysis.data ? {
-                        totalBundles: Object.values(bundleAnalysis.data.bundles).filter((b: BundleInfo) => b.holding_amount > 0).length,
-                        totalSolSpent: bundleAnalysis.data.total_sol_spent,
-                        currentHeldPercentage: bundleAnalysis.data.total_holding_percentage,
-                        totalBundledPercentage: bundleAnalysis.data.total_percentage_bundled,
-                    } : {
-                        totalBundles: 0,
-                        totalSolSpent: 0,
-                        currentHeldPercentage: 0,
-                        totalBundledPercentage: 0,
-                    },
-                    creatorRiskProfile: bundleAnalysis.success && bundleAnalysis.data ? {
-                        totalCreated: bundleAnalysis.data.creator_analysis.history.total_coins_created,
-                        currentTokenHeldPercent: bundleAnalysis.data.creator_analysis.holding_percentage,
-                        devWarnings: bundleAnalysis.data.creator_analysis.warning_flags.filter((w): w is string => w !== null),
-                    } : {
-                        totalCreated: 0,
-                        currentTokenHeldPercent: 0,
-                        devWarnings: [],
-                    },
-                    distribution: {
-                        topHolderPercent: distribution.topHolderPercent,
-                        topHolders: distribution.topHolders,
-                        suspiciousDistribution: distribution.suspiciousDistribution,
-                    },
-                },
-                timestamp: new Date().toISOString(),
+            return {
+                holderCount: holders.length,
+                topHolderPercent,
+                topHolders: holders.slice(0, 10), // Return top 10 holders
+                suspiciousDistribution,
+                isValid,
             };
-
-            // Emit event for downstream processing (e.g., PredictionService)
-            this.emit('tokenUpdate', tokenUpdate.tokenData);
-            elizaLogger.info('Token migration event emitted:', {
-                signature,
-                tokenAddress,
-                liquidityAddress,
-                tokenName,
-                symbol,
-                bundleAnalysisSuccess: bundleAnalysis.success,
-                distributionValid: distribution.isValid,
-            });
         } catch (error) {
-            elizaLogger.error('Error processing migration transaction:', {
-                signature,
-                error: error instanceof Error ? error.message : 'Unknown error',
-            });
+            const err = error instanceof Error ? error : new Error('Unknown error');
+            logger.market.error(tokenId, tokenAddress, 'token_distribution', err);
+
+            // Return default values on error
+            return {
+                holderCount: 0,
+                topHolderPercent: 0,
+                topHolders: [],
+                suspiciousDistribution: false,
+                isValid: true, // Assume valid if we can't check
+            };
         }
     }
 
@@ -260,10 +267,10 @@ export class TokenMigrationProvider extends EventEmitter {
         if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = setInterval(() => {
             if (this.ws?.readyState === WebSocket.OPEN) {
-                elizaLogger.info('Sending WebSocket ping...');
+                logger.api.request('solana_ws_ping', { timestamp: Date.now() });
                 this.ws.ping();
             } else {
-                elizaLogger.warn('Heartbeat failed - WebSocket not open');
+                logger.api.error('solana_ws_ping', new Error('WebSocket not open for heartbeat'));
                 this.reconnect();
             }
         }, 30000);
@@ -283,140 +290,425 @@ export class TokenMigrationProvider extends EventEmitter {
         }
     }
 
-    // Establishes WebSocket connection to Solana
-    connect(): void {
-        if (this.isConnected) {
-            elizaLogger.warn('Already connected to Solana WebSocket');
-            return;
-        }
-
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            elizaLogger.error('Max reconnection attempts reached. Migration provider offline.');
-            this.emit('streamOffline');
-            return;
-        }
-
-        const wsUrl = this.runtime.getSetting('SOLANA_WSS_URL') || 'wss://api.mainnet-beta.solana.com';
-        elizaLogger.info('Connecting to Solana WebSocket:', { url: wsUrl });
-
-        this.ws = new WebSocket(wsUrl);
-
-        this.ws.on('open', () => {
-            this.isConnected = true;
-            this.reconnectAttempts = 0;
-            elizaLogger.info('WebSocket connected');
-            this.setupHeartbeat();
-            this.subscribeToLogs(); // Subscribe to migration logs
-        });
-
-        this.ws.on('message', async (data: WebSocket.Data) => {
-            try {
-                const response = JSON.parse(data.toString());
-                // Handle subscription confirmation
-                if (response.result !== undefined && response.id === 1) {
-                    elizaLogger.info(`Subscription confirmed! Subscription ID: ${response.result}`);
-                    return;
-                }
-
-                if (response.method !== 'logsNotification') return;
-
-                const logs = response.params?.result?.value?.logs;
-                const signature = response.params?.result?.value?.signature;
-                if (!logs?.length) return;
-
-                await this.processMigrationLogs(logs, signature);
-            } catch (error) {
-                elizaLogger.error('Error processing WebSocket message:', {
-                    error: error instanceof Error ? error.message : 'Unknown error',
-                });
-            }
-        });
-
-        this.ws.on('close', (code, reason) => {
-            this.isConnected = false;
-            elizaLogger.warn('WebSocket connection closed:', { code, reason: reason.toString() });
-            this.clearHeartbeat();
-            this.reconnect();
-        });
-
-        this.ws.on('error', (error) => {
-            elizaLogger.error('WebSocket error:', { error: error.message });
-            this.reconnect();
-        });
-
-        this.ws.on('pong', () => {
-            elizaLogger.info('Received pong from server');
-        });
-    }
-
-    // Subscribes to logs mentioning the Pump.fun migrator program
-    private subscribeToLogs(): void {
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-            elizaLogger.error('Cannot subscribe: WebSocket is not open');
-            return;
-        }
-
-        const subscription = {
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'logsSubscribe',
-            params: [
-                { mentions: [PUMP_LIQUIDITY_MIGRATOR.toString()] }, // Filter for migrator logs
-                { commitment: 'confirmed' },
-            ],
-        };
-
-        this.ws.send(JSON.stringify(subscription));
-        elizaLogger.info('Subscription request sent');
-    }
-
-    // Attempts to reconnect with exponential backoff
+    // Reconnect with exponential backoff
     private reconnect(): void {
-        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            elizaLogger.error('Max reconnection attempts reached. Migration provider offline.');
-            this.emit('streamOffline');
-            return;
+        this.clearReconnectTimeout();
+
+        // Check if we've recently tried to reconnect (within 5 seconds)
+        const now = Date.now();
+        if (now - this.lastReconnectTime < 5000) {
+            // Increase backoff time exponentially up to a maximum of 2 minutes
+            this.backoffInterval = Math.min(this.backoffInterval * 2, 120000);
+        } else {
+            // Reset backoff if it's been a while since the last reconnect attempt
+            this.backoffInterval = 1000;
         }
 
         this.reconnectAttempts++;
-        const reconnectDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts - 1), 30000); // Cap at 30s
-        elizaLogger.info('Planning reconnection:', {
-            attempt: this.reconnectAttempts,
-            maxAttempts: this.maxReconnectAttempts,
-            delayMs: reconnectDelay,
-        });
+        this.lastReconnectTime = now;
 
-        this.clearReconnectTimeout();
+        // Log reconnection attempt with backoff information
+        logger.info(`Attempting to reconnect (attempt ${this.reconnectAttempts} of ${this.maxReconnectAttempts}) in ${this.backoffInterval}ms`);
+
         this.reconnectTimeout = setTimeout(() => {
+            // Only try to reconnect if we haven't already connected in the meantime
             if (!this.isConnected) {
-                if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
-                    this.ws.close();
-                }
-                this.ws = null;
-                elizaLogger.info('Attempting to reconnect...');
                 this.connect();
-            } else {
-                elizaLogger.info('Reconnection skipped - already connected');
             }
-        }, reconnectDelay);
+        }, this.backoffInterval);
     }
 
-    // Cleans up WebSocket connection
-    disconnect(): void {
-        this.clearHeartbeat();
-        this.clearReconnectTimeout();
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
+    // Update connect to remove historical scanning
+    connect(): void {
+        if (this.isConnected) {
+            logger.info('Already connected to Solana WebSocket');
+            return;
         }
-        this.isConnected = false;
-        this.reconnectAttempts = 0;
-        elizaLogger.info('Disconnected from Solana WebSocket');
+
+        // Generate WebSocket URL
+        const wsUrl = this.connection.rpcEndpoint.replace('https', 'wss');
+        logger.info('Establishing Solana WebSocket connection:', { url: wsUrl });
+
+        try {
+            // Create and setup WebSocket connection
+            this.ws = new WebSocket(wsUrl);
+
+            this.ws.on('open', () => {
+                this.isConnected = true;
+                // Only reset reconnect attempts after successful connection
+                this.reconnectAttempts = 0;
+                logger.info('Connected to Solana WebSocket');
+                this.emit('open');
+
+                this.setupHeartbeat();
+                this.subscribeToLogs(); // Subscribe to migration logs
+            });
+
+            this.ws.on('message', async (data: WebSocket.Data) => {
+                try {
+                    const response = JSON.parse(data.toString());
+
+                    // Handle rate limiting or error responses
+                    if (response.error) {
+                        logger.warn('WebSocket error response:', {
+                            code: response.error.code,
+                            message: response.error.message
+                        });
+
+                        // If we're being rate limited, add some additional backoff
+                        if (response.error.code === -32005 ||
+                            response.error.message?.includes('rate limit') ||
+                            response.error.message?.includes('429')) {
+                            this.backoffInterval = Math.min(this.backoffInterval * 2, 300000); // up to 5 minutes
+                            logger.warn(`Rate limiting detected, increasing backoff to ${this.backoffInterval}ms`);
+                        }
+                        return;
+                    }
+
+                    // Handle subscription confirmations
+                    if (response.id !== undefined && response.result !== undefined) {
+                        if (this.logsSubscriptionId === response.id) {
+                            this.logsSubscriptionId = response.result;
+                            logger.info('Bonding curve logs subscription confirmed', { subscriptionId: response.result });
+                        } else if (this.ammLogsSubscriptionId === response.id) {
+                            this.ammLogsSubscriptionId = response.result;
+                            logger.info('AMM logs subscription confirmed', { subscriptionId: response.result });
+                        }
+                        return;
+                    }
+
+                    // Handle logs notifications
+                    if (response.method === 'logsNotification') {
+                        const params = response.params;
+                        if (!params?.result?.value?.logs || !params.result.value.signature) return;
+
+                        const logs: string[] = params.result.value.logs;
+                        const signature = params.result.value.signature;
+
+                        if (!logs.length) return;
+
+                        // Analyze logs to detect potential migrations
+                        try {
+                            // Direct check for AMM create_pool instructions with burn - this is our strongest migration signal
+                            const hasCreatePoolInstruction = logs.some((log: string) =>
+                                (log.includes(PUMP_AMM_PROGRAM.toString()) && log.includes('create_pool')) ||
+                                (log.includes('CreatePool')) ||
+                                (log.includes('Program log: Instruction: CreatePool'))
+                            );
+
+                            const hasBurnInstruction = logs.some((log: string) =>
+                                log.includes('Instruction: Burn') ||
+                                log.includes('burn') ||
+                                log.includes('Burn')
+                            );
+
+                            // Check for involvement of both programs
+                            const isBondingCurveLog = logs.some((log: string) =>
+                                log.includes(PUMP_BONDING_CURVE_PROGRAM.toString()) ||
+                                log.includes('Pump.fun: Raydium Migration') ||
+                                log.includes('Bonding Curve')
+                            );
+
+                            const isAmmLog = logs.some((log: string) =>
+                                log.includes(PUMP_AMM_PROGRAM.toString()) &&
+                                (log.includes('initialLiquidity') || log.includes('Add liquidity') || log.includes('LP token'))
+                            );
+
+                            // This pattern (create_pool + burn) is highly indicative of migrations
+                            const hasHighConfidenceMigrationPattern = hasCreatePoolInstruction && hasBurnInstruction;
+                            const isMigrationCandidate = hasHighConfidenceMigrationPattern ||
+                                                        (hasCreatePoolInstruction && isBondingCurveLog) ||
+                                                        (isBondingCurveLog && isAmmLog && hasBurnInstruction);
+
+                            // Log detection details
+                            if (hasHighConfidenceMigrationPattern) {
+                                logger.info('Detected high-confidence migration pattern (create_pool + burn)', { signature });
+                            } else if (hasCreatePoolInstruction && isBondingCurveLog) {
+                                logger.info('Detected potential migration (create_pool + bonding curve)', { signature });
+                            } else if (isBondingCurveLog && isAmmLog && hasBurnInstruction) {
+                                logger.info('Detected potential migration (bonding curve + AMM + burn)', { signature });
+                            } else if (hasCreatePoolInstruction) {
+                                logger.debug('Detected AMM create_pool instruction (not migration)', { signature });
+                                return; // Not a migration
+                            } else if (isBondingCurveLog) {
+                                logger.debug('Detected bonding curve activity (not migration)', { signature });
+                                return; // Not a migration
+                            } else if (isAmmLog) {
+                                logger.debug('Detected AMM activity (not migration)', { signature });
+                                return; // Not a migration
+                            } else {
+                                logger.debug('No migration pattern detected in logs', { signature });
+                                return; // Not a migration
+                            }
+
+                            // Process migration if detected
+                            if (isMigrationCandidate) {
+                                await this.processMigrationLogs(logs, signature);
+                            }
+                        } catch (error) {
+                            logger.error('Error analyzing transaction logs:', {
+                                error: error instanceof Error ? error.message : 'Unknown error',
+                                signature
+                            });
+                        }
+                    }
+                } catch (error) {
+                    logger.error('Error processing WebSocket message:', {
+                        error: error instanceof Error ? error.message : 'Unknown error',
+                    });
+                }
+            });
+
+            this.ws.on('close', (code, reason) => {
+                this.isConnected = false;
+                logger.warn('WebSocket connection closed:', { code, reason: reason.toString() });
+                elizaLogger.warn(`TokenMigrationProvider WebSocket closed with code ${code}: ${reason.toString()}`);
+                this.clearHeartbeat();
+                this.reconnect();
+            });
+
+            this.ws.on('error', (error) => {
+                logger.error('WebSocket error:', { error: error.message });
+                elizaLogger.error(`TokenMigrationProvider WebSocket error: ${error.message}`);
+                this.isConnected = false;
+                this.reconnect();
+            });
+
+            this.ws.on('pong', () => {
+                logger.info('Received pong from server');
+            });
+        } catch (error) {
+            logger.error('Error creating WebSocket connection:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            elizaLogger.error(`Failed to create TokenMigrationProvider WebSocket: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            this.isConnected = false;
+            this.reconnect();
+        }
     }
 
-    // Returns current connection status
-    public getConnectionStatus(): { isConnected: boolean; reconnectAttempts: number } {
-        return { isConnected: this.isConnected, reconnectAttempts: this.reconnectAttempts };
+    // Subscribes to logs mentioning both the Pump.fun bonding curve and AMM programs
+    private subscribeToLogs(): void {
+        if (!this.ws || !this.isConnected) {
+            logger.error('Cannot subscribe to logs: WebSocket not connected');
+            return;
+        }
+
+        try {
+            // Subscribe to logs from the Pump AMM program
+            const ammSubscriptionId = Math.floor(Math.random() * 1000) + 1;
+            this.ammLogsSubscriptionId = ammSubscriptionId;
+
+            const ammSubscribeMsg = {
+                jsonrpc: '2.0',
+                id: ammSubscriptionId,
+                method: 'logsSubscribe',
+                params: [
+                    { mentions: [PUMP_AMM_PROGRAM.toString()] },
+                    { commitment: 'finalized' }
+                ]
+            };
+
+            this.ws.send(JSON.stringify(ammSubscribeMsg));
+            logger.info('Subscribed to Pump AMM logs', { subscriptionId: ammSubscriptionId });
+        } catch (error) {
+            logger.error('Failed to subscribe to logs:', { error: error instanceof Error ? error.message : 'Unknown error' });
+        }
+    }
+
+    // Process Migration Logs
+    private async processMigrationLogs(logs: string[], signature: string): Promise<void> {
+        try {
+            logger.debug('Processing potential migration logs', { signature, logCount: logs.length });
+
+            // Look for Migrate instruction from bonding curve program
+            let migrateIndex = -1;
+            for (let i = 0; i < logs.length - 1; i++) {
+                if (logs[i].includes('Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke') &&
+                    logs[i + 1].includes('Instruction: Migrate')) {
+                    migrateIndex = i;
+                    break;
+                }
+            }
+
+            if (migrateIndex === -1) {
+                logger.debug('No Migrate instruction found', { signature });
+                return;
+            }
+
+            // Look for create_pool instruction
+            let createPoolIndex = -1;
+            for (let i = 0; i < logs.length - 1; i++) {
+                if (logs[i].includes('Program pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA invoke') &&
+                    logs[i + 1].includes('Instruction: CreatePool')) {
+                    createPoolIndex = i;
+                    break;
+                }
+            }
+
+            if (createPoolIndex === -1) {
+                logger.debug('No create_pool instruction found', { signature });
+                return;
+            }
+
+            // Find the token mint address - it's Account 25 in the transaction
+            let tokenMint: string | null = null;
+            let poolId: string | null = null;
+
+            // Look for Account 25 in the logs
+            for (const log of logs) {
+                if (log.includes('Account 25:')) {
+                    const parts = log.split('Account 25:');
+                    if (parts.length > 1) {
+                        // Extract the address from the account line
+                        const addressMatch = parts[1].match(/\s+([1-9A-HJ-NP-Za-km-z]{32,44})/);
+                        if (addressMatch) {
+                            tokenMint = addressMatch[1];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Look for Pool ID in the create_pool instruction logs
+            for (let i = createPoolIndex; i < logs.length; i++) {
+                const log = logs[i];
+                if (log.includes('#1 - Pool:')) {
+                    const parts = log.split('#1 - Pool:');
+                    if (parts.length > 1) {
+                        poolId = parts[1].trim();
+                    }
+                }
+            }
+
+            if (!tokenMint || !poolId) {
+                logger.debug('Could not find token mint or pool ID in logs', { signature });
+                return;
+            }
+
+            logger.info('Found token migration details:', {
+                signature,
+                tokenMint,
+                poolId,
+                isAmmPool: true
+            });
+
+            // Fetch token metadata (name and symbol)
+            let tokenName = 'Unknown';
+            let symbol = 'UNKNOWN';
+            try {
+                // First try to fetch token metadata from on-chain data
+                const [metadataAddress] = PublicKey.findProgramAddressSync(
+                    [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), new PublicKey(tokenMint).toBuffer()],
+                    TOKEN_METADATA_PROGRAM_ID
+                );
+                const accountInfo = await this.connection.getAccountInfo(metadataAddress);
+                if (accountInfo?.data) {
+                    const nameLength = accountInfo.data[65];
+                    tokenName = accountInfo.data.slice(66, 66 + nameLength).toString('utf8').replace(/\0/g, '');
+                    symbol = tokenName.slice(0, 6).toUpperCase(); // Derive symbol from name (first 6 chars)
+                }
+
+                // If metadata fetch failed, try to extract from logs
+                if (tokenName === 'Unknown') {
+                    for (const log of logs) {
+                        // Check for token name patterns in logs
+                        // Common patterns: "Transfer 1000 fukcoin", "Add liquidity fukcoin", etc.
+                        // We're looking for token names that appear after verbs like "Transfer", "Mint", etc.
+                        // Also look for simple "Token: NAME" patterns
+
+                        const tokenNameMatches =
+                            log.match(/Transfer[^a-zA-Z]+([\w]+)/) ||
+                            log.match(/Mint[^a-zA-Z]+([\w]+)/) ||
+                            log.match(/Token:\s*([\w]+)/) ||
+                            log.match(/burn[^a-zA-Z]+([\w]+)/i) ||
+                            log.match(/([a-zA-Z0-9]{3,10})-WSOL/) ||  // Common pattern for LP tokens
+                            log.match(/liquidity[^a-zA-Z]+([\w]+)/i);
+
+                        if (tokenNameMatches && tokenNameMatches[1]) {
+                            // Found a potential token name
+                            tokenName = tokenNameMatches[1];
+                            symbol = tokenName.toUpperCase();
+                            logger.debug('Extracted token name from logs', { tokenName, symbol });
+                            break;
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error('Error fetching token metadata:', { error: error instanceof Error ? error.message : 'Unknown error' });
+
+                // Fallback to using a name derived from the mint address
+                tokenName = `Token-${tokenMint.substring(0, 6)}`;
+                symbol = tokenMint.substring(0, 4).toUpperCase();
+            }
+
+            // Analyze bundling and distribution
+            const bundleAnalysis = await this.analyzeMintAddress(tokenMint);
+            const distribution = await this.checkTokenDistribution(tokenMint);
+
+            // Construct token update event
+            const tokenUpdate: TokenUpdateEvent = {
+                tokenData: {
+                    tokenId: signature,
+                    address: tokenMint,
+                    symbol,
+                    name: tokenName,
+                    marketCap: 0, // Initial market cap unknown until trading starts
+                    poolId: poolId, // New field for AMM pool ID
+                    isAmmPool: true, // Flag to indicate this is now an AMM pool
+                    bundleData: bundleAnalysis.success && bundleAnalysis.data ? {
+                        totalBundles: Object.values(bundleAnalysis.data.bundles || {}).filter((b: BundleInfo) => b.holding_amount > 0).length,
+                        totalSolSpent: bundleAnalysis.data.total_sol_spent || 0,
+                        currentHeldPercentage: bundleAnalysis.data.total_holding_percentage || 0,
+                        totalBundledPercentage: bundleAnalysis.data.total_percentage_bundled || 0,
+                    } : {
+                        totalBundles: 0,
+                        totalSolSpent: 0,
+                        currentHeldPercentage: 0,
+                        totalBundledPercentage: 0,
+                    },
+                    creatorRiskProfile: bundleAnalysis.success && bundleAnalysis.data && bundleAnalysis.data.creator_analysis ? {
+                        totalCreated: bundleAnalysis.data.creator_analysis.history?.total_coins_created || 0,
+                        currentTokenHeldPercent: bundleAnalysis.data.creator_analysis.holding_percentage || 0,
+                        devWarnings: (bundleAnalysis.data.creator_analysis.warning_flags || []).filter((w): w is string => w !== null),
+                    } : {
+                        totalCreated: 0,
+                        currentTokenHeldPercent: 0,
+                        devWarnings: [],
+                    },
+                    distribution: {
+                        topHolderPercent: distribution.topHolderPercent,
+                        topHolders: distribution.topHolders,
+                        suspiciousDistribution: distribution.suspiciousDistribution,
+                    },
+                },
+                timestamp: new Date().toISOString(),
+            };
+
+            // Emit event for downstream processing (e.g., PredictionService)
+            this.emit('tokenUpdate', tokenUpdate.tokenData);
+            logger.info('Token migration to AMM event emitted:', {
+                signature,
+                tokenAddress: tokenMint,
+                poolId,
+                tokenName,
+                symbol,
+                bundleAnalysisSuccess: bundleAnalysis.success,
+                distributionValid: distribution.isValid,
+            });
+
+        } catch (error) {
+            const err = error instanceof Error ? error : new Error('Unknown error');
+            logger.api.error('migration_log_process', err);
+        }
+    }
+
+    // Returns the connection status
+    public getConnectionStatus(): { isConnected: boolean, reconnectAttempts: number } {
+        return {
+            isConnected: this.isConnected,
+            reconnectAttempts: this.reconnectAttempts
+        };
     }
 
     // Returns stats on Trench API response times
@@ -432,6 +724,42 @@ export class TokenMigrationProvider extends EventEmitter {
             last: responseTimesMs[responseTimesMs.length - 1],
             sampleSize: times.length,
         };
+    }
+
+    // Explicitly disconnect from WebSocket and clean up resources
+    public disconnect(): void {
+        logger.info('Disconnecting from Solana WebSocket');
+        this.clearHeartbeat();
+        this.clearReconnectTimeout();
+
+        if (this.ws) {
+            // Remove all listeners before closing
+            this.ws.removeAllListeners();
+
+            if (this.ws.readyState === WebSocket.OPEN) {
+                this.ws.close();
+            }
+            this.ws = null;
+        }
+
+        this.isConnected = false;
+        this.reconnectAttempts = 0;
+        this.backoffInterval = 1000;
+        logger.info('Disconnected from Solana WebSocket');
+    }
+
+    // Public method to check and report on the RPC URL settings
+    public logConnectionSettings(): void {
+        const rpcUrl = this.runtime.getSetting('SOLANA_RPC_URL') || 'https://api.mainnet-beta.solana.com';
+        const wsUrl = rpcUrl.replace('https://', 'wss://').replace('http://', 'ws://');
+
+        elizaLogger.info('TokenMigrationProvider Connection Settings:', {
+            httpRpcUrl: rpcUrl,
+            derivedWsUrl: wsUrl,
+            isCustomUrl: !!this.runtime.getSetting('SOLANA_RPC_URL'),
+            connectionStatus: this.isConnected ? 'Connected' : 'Disconnected',
+            reconnectAttempts: this.reconnectAttempts
+        });
     }
 }
 

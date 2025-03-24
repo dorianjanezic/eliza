@@ -1,9 +1,12 @@
 import { elizaLogger, type IAgentRuntime, stringToUuid, type UUID } from "@ai16z/eliza";
 import type { PredictionResult, TokenPrediction } from "../types";
+import { Portfolio } from "../types/portfolio";
+import { logger } from "../utils/logger";
 
 // Manages prediction summaries and historical accuracy for token predictions
 export class LearningService {
     private readonly globalSummaryRoomId: UUID = stringToUuid("token-prediction-summaries"); // Unique room ID for storing all summaries
+    private readonly globalPortfolioRoomId: UUID = stringToUuid("global-portfolio");
     private static initialized = false; // Static flag to ensure one-time initialization
 
     constructor(private runtime: IAgentRuntime) {
@@ -11,14 +14,222 @@ export class LearningService {
         if (!LearningService.initialized) {
             this.initializeGlobalRoom();
             LearningService.initialized = true;
+            this.initializePortfolio(); // Add this
         }
+    }
+
+    async initializePortfolio() {
+        await this.runtime.ensureRoomExists(this.globalPortfolioRoomId);
+        await this.runtime.ensureParticipantInRoom(this.runtime.agentId, this.globalPortfolioRoomId);
+
+        // Get existing memories in the portfolio room
+        const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalPortfolioRoomId] });
+
+        // Clear all existing memories to start completely fresh
+        for (const memory of memories) {
+            try {
+                // Ensure memory.id is a valid UUID
+                if (memory.id) {
+                    await this.runtime.messageManager.removeMemory(memory.id);
+                    logger.portfolio.reset();
+                }
+            } catch (error) {
+                const err = error instanceof Error ? error : new Error('Unknown error');
+                logger.portfolio.error(err);
+            }
+        }
+
+        // Create a fresh initial portfolio with $1000 and no trades
+        const initialPortfolio: Portfolio = {
+            initialBalance: 1000,
+            currentBalance: 1000,
+            trades: [],
+            maxActivePositions: 3, // Limit concurrent trades to 3
+            maxPositionSize: 0.2,  // Limit position size to 20% of portfolio
+            minPortfolioThreshold: 0.6, // Don't enter trades when below 60% of initial
+            stats: {
+                totalTrades: 0,
+                profitableTrades: 0,
+                unprofitableTrades: 0,
+                winRate: 0,
+                totalPnL: 0,
+                avgPnL: 0,
+                avgWin: 0,
+                avgLoss: 0,
+                maxDrawdown: 0,
+                maxDrawdownPercentage: 0
+            }
+        };
+
+        await this.runtime.messageManager.createMemory({
+            id: stringToUuid("portfolio-initial"),
+            userId: this.runtime.agentId,
+            agentId: this.runtime.agentId,
+            roomId: this.globalPortfolioRoomId,
+            content: { text: "Initial Portfolio", metadata: initialPortfolio },
+            createdAt: Date.now()
+        }, true);
+
+        logger.portfolio.initialized(initialPortfolio.initialBalance);
+    }
+
+    async updatePortfolio(portfolio: Portfolio) {
+        // Update portfolio statistics before saving
+        this.updatePortfolioStats(portfolio);
+
+        const memory = {
+            id: stringToUuid(`portfolio-${Date.now()}`),
+            userId: this.runtime.agentId,
+            agentId: this.runtime.agentId,
+            roomId: this.globalPortfolioRoomId,
+            content: {
+                text: `Portfolio Update - Balance: $${portfolio.currentBalance.toFixed(2)}`,
+                metadata: portfolio
+            },
+            createdAt: Date.now()
+        };
+
+        await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
+
+        logger.portfolio.updated(
+            portfolio.currentBalance,
+            portfolio.initialBalance,
+            portfolio.stats.totalTrades,
+            portfolio.stats.winRate
+        );
+    }
+
+    /**
+     * Updates portfolio statistics based on trade history
+     */
+    private updatePortfolioStats(portfolio: Portfolio) {
+        const closedTrades = portfolio.trades.filter(t => t.status === 'CLOSED');
+        const profitableTrades = closedTrades.filter(t => t.profitLoss > 0);
+        const unprofitableTrades = closedTrades.filter(t => t.profitLoss <= 0);
+
+        // Calculate basic stats
+        const totalPnL = closedTrades.reduce((sum, trade) => sum + trade.profitLoss, 0);
+        const avgPnL = closedTrades.length > 0 ? totalPnL / closedTrades.length : 0;
+        const avgWin = profitableTrades.length > 0
+            ? profitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / profitableTrades.length
+            : 0;
+        const avgLoss = unprofitableTrades.length > 0
+            ? unprofitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / unprofitableTrades.length
+            : 0;
+
+        // Calculate max drawdown
+        let maxBalance = portfolio.initialBalance;
+        let maxDrawdown = 0;
+
+        // Sort trades by exit time (if closed) or entry time (if open)
+        const sortedTrades = [...portfolio.trades].sort((a, b) => {
+            const aTime = a.exitTime ? new Date(a.exitTime).getTime() : new Date(a.entryTime).getTime();
+            const bTime = b.exitTime ? new Date(b.exitTime).getTime() : new Date(b.entryTime).getTime();
+            return aTime - bTime;
+        });
+
+        // Calculate running balance and track max drawdown
+        let runningBalance = portfolio.initialBalance;
+
+        for (const trade of sortedTrades) {
+            if (trade.status === 'CLOSED') {
+                runningBalance = runningBalance + trade.profitLoss;
+
+                if (runningBalance > maxBalance) {
+                    maxBalance = runningBalance;
+                }
+
+                const drawdown = maxBalance - runningBalance;
+                if (drawdown > maxDrawdown) {
+                    maxDrawdown = drawdown;
+                }
+            }
+        }
+
+        // Update portfolio stats
+        portfolio.stats = {
+            totalTrades: closedTrades.length,
+            profitableTrades: profitableTrades.length,
+            unprofitableTrades: unprofitableTrades.length,
+            winRate: closedTrades.length > 0 ? (profitableTrades.length / closedTrades.length) * 100 : 0,
+            totalPnL,
+            avgPnL,
+            avgWin,
+            avgLoss,
+            maxDrawdown,
+            maxDrawdownPercentage: maxBalance > 0 ? (maxDrawdown / maxBalance) * 100 : 0
+        };
+    }
+
+    async getPortfolio(): Promise<Portfolio> {
+        const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalPortfolioRoomId] });
+        if (memories.length === 0) {
+            // Initialize with default values if no portfolio exists
+            const initialPortfolio: Portfolio = {
+                initialBalance: 1000,
+                currentBalance: 1000,
+                trades: [],
+                maxActivePositions: 3,
+                maxPositionSize: 0.2,
+                minPortfolioThreshold: 0.6,
+                stats: {
+                    totalTrades: 0,
+                    profitableTrades: 0,
+                    unprofitableTrades: 0,
+                    winRate: 0,
+                    totalPnL: 0,
+                    avgPnL: 0,
+                    avgWin: 0,
+                    avgLoss: 0,
+                    maxDrawdown: 0,
+                    maxDrawdownPercentage: 0
+                }
+            };
+
+            await this.runtime.messageManager.createMemory({
+                id: stringToUuid("portfolio-initial"),
+                userId: this.runtime.agentId,
+                agentId: this.runtime.agentId,
+                roomId: this.globalPortfolioRoomId,
+                content: { text: "Initial Portfolio", metadata: initialPortfolio },
+                createdAt: Date.now()
+            }, true);
+            elizaLogger.info("Created initial portfolio with default settings");
+            return initialPortfolio;
+        }
+
+        const latest = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
+        const portfolio = latest.content.metadata as Portfolio;
+
+        // Ensure portfolio has the new fields (for backward compatibility)
+        if (!portfolio.maxActivePositions) portfolio.maxActivePositions = 3;
+        if (!portfolio.maxPositionSize) portfolio.maxPositionSize = 0.2;
+        if (!portfolio.minPortfolioThreshold) portfolio.minPortfolioThreshold = 0.6;
+        if (!portfolio.stats) {
+            portfolio.stats = {
+                totalTrades: 0,
+                profitableTrades: 0,
+                unprofitableTrades: 0,
+                winRate: 0,
+                totalPnL: 0,
+                avgPnL: 0,
+                avgWin: 0,
+                avgLoss: 0,
+                maxDrawdown: 0,
+                maxDrawdownPercentage: 0
+            };
+            // Update stats based on existing trades
+            this.updatePortfolioStats(portfolio);
+        }
+
+        return portfolio;
     }
 
     // Sets up a global room for storing prediction summaries
     private async initializeGlobalRoom() {
         try {
             try {
-                // Ensure the room exists in Eliza’s memory system
+                // Ensure the room exists in Eliza's memory system
                 await this.runtime.ensureRoomExists(this.globalSummaryRoomId);
                 elizaLogger.info("Created global summary room:", { roomId: this.globalSummaryRoomId });
             } catch (error: any) {
@@ -43,7 +254,7 @@ export class LearningService {
         try {
             // Create memory object with summary details
             const memory = {
-                id: stringToUuid(`global-summary-${tokenId}`), // Unique ID for this token’s summary
+                id: stringToUuid(`global-summary-${tokenId}`), // Unique ID for this token's summary
                 userId: this.runtime.agentId,
                 agentId: this.runtime.agentId,
                 roomId: this.globalSummaryRoomId,
@@ -111,7 +322,7 @@ export class LearningService {
             const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
                 roomIds: [this.globalSummaryRoomId]
             });
-            elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
+            // elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
 
             if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 }; // Default for empty history
 

@@ -101,3 +101,15 @@ Can be done by latest and by memory embedding
 
   https://github.com/karpathy/reinforcejs?tab=readme-ov-file
 
+  https://medium.com/coinmonks/deep-reinforcement-learning-for-trading-cryptocurrencies-5b5502b1ece1
+
+  https://github.com/NickKaparinos/Automated-Cryptocurrency-trading-using-Deep-RL
+
+
+Data features
+
+- moonshot listing
+- DEX paid
+
+
+

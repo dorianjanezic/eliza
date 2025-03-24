@@ -21,9 +21,58 @@ export interface TokenMetadata {
     [key: string]: unknown;
 }
 
+export interface TokenDataRecord {
+    id: string;
+    tokenId: string;
+    timestamp: string;
+    address: string;
+    symbol: string;
+    name: string;
+    price?: number;
+    marketCap: number;
+    holderCount?: number;
+    volume1hUSD?: number;
+    volume24hUSD?: number;
+    priceChange1h?: number;
+    priceChange24h?: number;
+    uniqueTraders1h?: number;
+    trades1h?: number;
+    topHolderPercent?: number;
+    topHolders?: string;
+    suspiciousDistribution?: number;
+    totalBundles?: number;
+    totalSolSpent?: number;
+    currentHeldPercentage?: number;
+    totalBundledPercentage?: number;
+    ohlcvData?: string;
+    twitterSentiment?: string;
+    currentPrediction?: string;
+    checkNumber?: number;
+    isInitialCheck: number;
+    checkType: string;
+    predictionResultId?: string;
+    tradeId?: string;
+    entryPrice?: number;
+    entryTime?: string;
+    exitPrice?: number;
+    exitTime?: string;
+    profitLoss?: number;
+    profitLossPercent?: number;
+    agentId: string;
+}
+
+export interface TokenDataAdapter {
+    saveTokenData(data: TokenDataRecord): Promise<void>;
+    getTokenDataByTokenId(tokenId: string): Promise<TokenDataRecord[]>;
+    getTokenDataByPredictionId(predictionResultId: string): Promise<TokenDataRecord[]>;
+    getTokenDataByAddressAndTimeRange(address: string, startTime: string, endTime: string): Promise<TokenDataRecord[]>;
+    getTokenDataByCheckType(checkType: string): Promise<TokenDataRecord[]>;
+    getAllTokensWithInitialChecks(): Promise<TokenDataRecord[]>;
+}
+
 export class SqliteDatabaseAdapter
     extends DatabaseAdapter<Database>
-    implements IDatabaseCacheAdapter
+    implements IDatabaseCacheAdapter, TokenDataAdapter
 {
     async getRoom(roomId: UUID): Promise<UUID | null> {
         const sql = "SELECT id FROM rooms WHERE id = ?";
@@ -768,5 +817,87 @@ export class SqliteDatabaseAdapter
         `;
 
         this.db.prepare(sql).run(token, agentId);
+    }
+
+    // Token Data Methods
+    async saveTokenData(data: TokenDataRecord): Promise<void> {
+        const stmt = this.db.prepare(`
+            INSERT INTO token_data (
+                id, tokenId, timestamp, address, symbol, name, price, marketCap,
+                holderCount, volume1hUSD, volume24hUSD, priceChange1h, priceChange24h,
+                uniqueTraders1h, trades1h, topHolderPercent, topHolders, suspiciousDistribution,
+                totalBundles, totalSolSpent, currentHeldPercentage, totalBundledPercentage,
+                ohlcvData, twitterSentiment, currentPrediction, checkNumber,
+                isInitialCheck, checkType, predictionResultId, tradeId, entryPrice, entryTime,
+                exitPrice, exitTime, profitLoss, profitLossPercent, agentId
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+        `);
+
+        stmt.run(
+            data.id,
+            data.tokenId,
+            data.timestamp,
+            data.address,
+            data.symbol,
+            data.name,
+            data.price,
+            data.marketCap,
+            data.holderCount,
+            data.volume1hUSD,
+            data.volume24hUSD,
+            data.priceChange1h,
+            data.priceChange24h,
+            data.uniqueTraders1h,
+            data.trades1h,
+            data.topHolderPercent,
+            data.topHolders,
+            data.suspiciousDistribution ? 1 : 0,
+            data.totalBundles,
+            data.totalSolSpent,
+            data.currentHeldPercentage,
+            data.totalBundledPercentage,
+            data.ohlcvData,
+            data.twitterSentiment,
+            data.currentPrediction,
+            data.checkNumber,
+            data.isInitialCheck,
+            data.checkType,
+            data.predictionResultId,
+            data.tradeId,
+            data.entryPrice,
+            data.entryTime,
+            data.exitPrice,
+            data.exitTime,
+            data.profitLoss,
+            data.profitLossPercent,
+            data.agentId
+        );
+    }
+
+    async getTokenDataByTokenId(tokenId: string): Promise<TokenDataRecord[]> {
+        const stmt = this.db.prepare('SELECT * FROM token_data WHERE tokenId = ? ORDER BY timestamp ASC');
+        return stmt.all(tokenId) as TokenDataRecord[];
+    }
+
+    async getTokenDataByPredictionId(predictionResultId: string): Promise<TokenDataRecord[]> {
+        const stmt = this.db.prepare('SELECT * FROM token_data WHERE predictionResultId = ? ORDER BY timestamp ASC');
+        return stmt.all(predictionResultId) as TokenDataRecord[];
+    }
+
+    async getTokenDataByAddressAndTimeRange(address: string, startTime: string, endTime: string): Promise<TokenDataRecord[]> {
+        const stmt = this.db.prepare('SELECT * FROM token_data WHERE address = ? AND timestamp >= ? AND timestamp <= ? ORDER BY timestamp ASC');
+        return stmt.all(address, startTime, endTime) as TokenDataRecord[];
+    }
+
+    async getTokenDataByCheckType(checkType: string): Promise<TokenDataRecord[]> {
+        const stmt = this.db.prepare('SELECT * FROM token_data WHERE checkType = ? ORDER BY timestamp DESC');
+        return stmt.all(checkType) as TokenDataRecord[];
+    }
+
+    async getAllTokensWithInitialChecks(): Promise<TokenDataRecord[]> {
+        const stmt = this.db.prepare('SELECT * FROM token_data WHERE isInitialCheck = 1 ORDER BY timestamp DESC');
+        return stmt.all() as TokenDataRecord[];
     }
 }

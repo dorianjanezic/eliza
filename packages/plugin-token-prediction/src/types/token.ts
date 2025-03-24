@@ -5,6 +5,18 @@ export interface TokenData {
     name: string;
     marketCap: number;
     price?: number;
+    holderCount?: number;
+    volume1hUSD?: number;
+    volume24hUSD?: number;
+    priceChange1h?: number;
+    priceChange24h?: number;
+    uniqueTraders1h?: number;
+    trades1h?: number;
+    distribution?: {
+        topHolderPercent: number;
+        topHolders: Array<{ address: string; amount: number; percentage: number }>;
+        suspiciousDistribution: boolean;
+    };
     bundleData?: {
         totalBundles: number;
         totalSolSpent: number;
@@ -16,15 +28,8 @@ export interface TokenData {
         currentTokenHeldPercent: number;
         devWarnings: string[];
     };
-    distribution?: {
-        topHolderPercent: number;
-        topHolders: Array<{
-            address: string;
-            amount: number;
-            percentage: number;
-        }>;
-        suspiciousDistribution: boolean;
-   };
+    poolId?: string;
+    isAmmPool?: boolean;
 }
 
 export interface MarketData {

@@ -438,22 +438,37 @@ async function startAgent(character: Character, directClient) {
       await db.init();
 
       const cache = intializeDbCache(character, db);
+
+      // Log the SOLANA_RPC_URL from the environment for debugging
+      const solanaRpcUrl = process.env.SOLANA_RPC_URL || character.settings?.secrets?.SOLANA_RPC_URL;
+      if (solanaRpcUrl) {
+        elizaLogger.info(`Using SOLANA_RPC_URL from environment: ${solanaRpcUrl}`);
+      } else {
+        elizaLogger.warn('No SOLANA_RPC_URL found in environment, will use default endpoint');
+      }
+
       const runtime = createAgent(character, db, cache, token);
 
       await runtime.initialize();
 
-      // Manually trigger the startPredictionStream action
-      const tokenPredictionPlugin = runtime.plugins.find(p => p.name === "token-prediction");
-      if (tokenPredictionPlugin) {
-        const startAction = tokenPredictionPlugin.actions?.find(a => a.name === "startPredictionStream");
-        if (startAction) {
-          elizaLogger.info("Triggering startPredictionStream action...");
-          await startAction.handler(runtime, { id: stringToUuid("initial"), content: { text: "initialization" } } as Memory); // Mock memory
-        } else {
-          elizaLogger.warn("startPredictionStream action not found in token-prediction plugin");
-        }
-      } else {
-        elizaLogger.warn("token-prediction plugin not loaded");
+      // Explicitly initialize the token prediction plugin if it's loaded
+      // This ensures the WebSocket connection is established with the proper URL
+      const tokenPredictionAction = runtime.actions.find(a => a.name === "startPredictionStream");
+      if (tokenPredictionAction) {
+        elizaLogger.info("Explicitly initializing token prediction plugin");
+
+        // Create a dummy message for the handler (required by the Action interface)
+        const dummyMessage: Memory = {
+          id: stringToUuid("token-prediction-initialization"),
+          userId: runtime.agentId,
+          agentId: runtime.agentId,
+          roomId: stringToUuid("initialization-room"),
+          content: { text: "Initialize token prediction plugin" },
+          createdAt: Date.now()
+        };
+
+        // Call the handler with the required arguments
+        await tokenPredictionAction.handler(runtime, dummyMessage);
       }
 
       const clients = await initializeClients(character, runtime);
