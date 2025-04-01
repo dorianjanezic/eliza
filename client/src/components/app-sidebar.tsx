@@ -1,5 +1,5 @@
 // File: /src/components/app-sidebar.tsx
-import { Calendar, Inbox, Search } from 'lucide-react';
+import { Calendar, Inbox, Search, LineChart } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import {
   Sidebar,
@@ -27,6 +27,11 @@ const items = [
     title: 'Token Prediction',
     url: 'predict-token',
     icon: Search,
+  },
+  {
+    title: 'Token Dashboard',
+    url: 'token-dashboard',
+    icon: LineChart,
   },
 ];
 

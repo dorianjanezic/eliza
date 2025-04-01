@@ -35,8 +35,6 @@ export interface PredictionCheck {
     ohlcv?: OHLCVData[];
 }
 
-
-
 export interface PredictionResult {
     prediction: TokenPrediction;
     checks?: PredictionCheck[];
@@ -50,10 +48,4 @@ export interface PredictionResult {
     };
     reflection?: string;
     lessonsLearned?: string[];
-    tradeResult?: {
-        entryPrice: number;
-        exitPrice?: number;
-        profitLoss: number;
-        status: 'OPEN' | 'CLOSED';
-    };
 }

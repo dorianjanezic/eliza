@@ -1,6 +1,6 @@
 import { elizaLogger, type IAgentRuntime, stringToUuid, type UUID } from "@ai16z/eliza";
 import type { PredictionResult, TokenPrediction } from "../types";
-import { Portfolio } from "../types/portfolio";
+import { Portfolio, Trade } from "../types/portfolio";
 import { logger } from "../utils/logger";
 
 // Manages prediction summaries and historical accuracy for token predictions
@@ -14,7 +14,7 @@ export class LearningService {
         if (!LearningService.initialized) {
             this.initializeGlobalRoom();
             LearningService.initialized = true;
-            this.initializePortfolio(); // Add this
+            this.initializePortfolio();
         }
     }
 
@@ -28,7 +28,6 @@ export class LearningService {
         // Clear all existing memories to start completely fresh
         for (const memory of memories) {
             try {
-                // Ensure memory.id is a valid UUID
                 if (memory.id) {
                     await this.runtime.messageManager.removeMemory(memory.id);
                     logger.portfolio.reset();
@@ -57,7 +56,21 @@ export class LearningService {
                 avgWin: 0,
                 avgLoss: 0,
                 maxDrawdown: 0,
-                maxDrawdownPercentage: 0
+                maxDrawdownPercentage: 0,
+                activeTrades: 0,
+                closedTrades: 0,
+                avgTradeDuration: 0,
+                bestTrade: {
+                    symbol: '',
+                    profitLoss: 0,
+                    profitLossPercentage: 0
+                },
+                worstTrade: {
+                    symbol: '',
+                    profitLoss: 0,
+                    profitLossPercentage: 0
+                },
+                currentOpenPositions: []
             }
         };
 
@@ -74,81 +87,58 @@ export class LearningService {
     }
 
     async updatePortfolio(portfolio: Portfolio) {
-        // Update portfolio statistics before saving
-        this.updatePortfolioStats(portfolio);
-
-        const memory = {
-            id: stringToUuid(`portfolio-${Date.now()}`),
-            userId: this.runtime.agentId,
-            agentId: this.runtime.agentId,
-            roomId: this.globalPortfolioRoomId,
-            content: {
-                text: `Portfolio Update - Balance: $${portfolio.currentBalance.toFixed(2)}`,
-                metadata: portfolio
-            },
-            createdAt: Date.now()
-        };
-
-        await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
-
-        logger.portfolio.updated(
-            portfolio.currentBalance,
-            portfolio.initialBalance,
-            portfolio.stats.totalTrades,
-            portfolio.stats.winRate
-        );
-    }
-
-    /**
-     * Updates portfolio statistics based on trade history
-     */
-    private updatePortfolioStats(portfolio: Portfolio) {
+        // Calculate portfolio statistics
         const closedTrades = portfolio.trades.filter(t => t.status === 'CLOSED');
+        const openTrades = portfolio.trades.filter(t => t.status === 'OPEN');
         const profitableTrades = closedTrades.filter(t => t.profitLoss > 0);
-        const unprofitableTrades = closedTrades.filter(t => t.profitLoss <= 0);
+        const unprofitableTrades = closedTrades.filter(t => t.profitLoss < 0);
 
-        // Calculate basic stats
-        const totalPnL = closedTrades.reduce((sum, trade) => sum + trade.profitLoss, 0);
+        // Calculate trade statistics
+        const totalPnL = closedTrades.reduce((sum, t) => sum + t.profitLoss, 0);
         const avgPnL = closedTrades.length > 0 ? totalPnL / closedTrades.length : 0;
-        const avgWin = profitableTrades.length > 0
-            ? profitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / profitableTrades.length
-            : 0;
-        const avgLoss = unprofitableTrades.length > 0
-            ? unprofitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / unprofitableTrades.length
-            : 0;
+        const avgWin = profitableTrades.length > 0 ? profitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / profitableTrades.length : 0;
+        const avgLoss = unprofitableTrades.length > 0 ? unprofitableTrades.reduce((sum, t) => sum + t.profitLoss, 0) / unprofitableTrades.length : 0;
 
-        // Calculate max drawdown
-        let maxBalance = portfolio.initialBalance;
+        // Calculate drawdown
+        const balanceHistory = portfolio.trades.map(t => ({
+            time: new Date(t.entryTime).getTime(),
+            balance: t.entryAmount
+        }));
         let maxDrawdown = 0;
+        let maxDrawdownPercentage = 0;
+        let peak = portfolio.initialBalance;
 
-        // Sort trades by exit time (if closed) or entry time (if open)
-        const sortedTrades = [...portfolio.trades].sort((a, b) => {
-            const aTime = a.exitTime ? new Date(a.exitTime).getTime() : new Date(a.entryTime).getTime();
-            const bTime = b.exitTime ? new Date(b.exitTime).getTime() : new Date(b.entryTime).getTime();
-            return aTime - bTime;
-        });
-
-        // Calculate running balance and track max drawdown
-        let runningBalance = portfolio.initialBalance;
-
-        for (const trade of sortedTrades) {
-            if (trade.status === 'CLOSED') {
-                runningBalance = runningBalance + trade.profitLoss;
-
-                if (runningBalance > maxBalance) {
-                    maxBalance = runningBalance;
-                }
-
-                const drawdown = maxBalance - runningBalance;
-                if (drawdown > maxDrawdown) {
-                    maxDrawdown = drawdown;
-                }
+        for (const trade of portfolio.trades) {
+            const balance = trade.entryAmount;
+            if (balance > peak) {
+                peak = balance;
             }
+            const drawdown = peak - balance;
+            const drawdownPercentage = (drawdown / peak) * 100;
+            maxDrawdown = Math.max(maxDrawdown, drawdown);
+            maxDrawdownPercentage = Math.max(maxDrawdownPercentage, drawdownPercentage);
         }
+
+        // Calculate best and worst trades
+        const bestTrade = closedTrades.length > 0 ? closedTrades.reduce((best, current) =>
+            current.profitLossPercentage > best.profitLossPercentage ? current : best
+        ) : { symbol: 'N/A', profitLoss: 0, profitLossPercentage: 0 } as Trade;
+
+        const worstTrade = closedTrades.length > 0 ? closedTrades.reduce((worst, current) =>
+            current.profitLossPercentage < worst.profitLossPercentage ? current : worst
+        ) : { symbol: 'N/A', profitLoss: 0, profitLossPercentage: 0 } as Trade;
+
+        // Calculate average trade duration
+        const avgTradeDuration = closedTrades.length > 0 ?
+            closedTrades.reduce((sum, t) => {
+                const entry = new Date(t.entryTime).getTime();
+                const exit = new Date(t.exitTime || '').getTime();
+                return sum + (exit - entry) / (1000 * 60); // Convert to minutes
+            }, 0) / closedTrades.length : 0;
 
         // Update portfolio stats
         portfolio.stats = {
-            totalTrades: closedTrades.length,
+            totalTrades: portfolio.trades.length,
             profitableTrades: profitableTrades.length,
             unprofitableTrades: unprofitableTrades.length,
             winRate: closedTrades.length > 0 ? (profitableTrades.length / closedTrades.length) * 100 : 0,
@@ -157,8 +147,102 @@ export class LearningService {
             avgWin,
             avgLoss,
             maxDrawdown,
-            maxDrawdownPercentage: maxBalance > 0 ? (maxDrawdown / maxBalance) * 100 : 0
+            maxDrawdownPercentage,
+            activeTrades: openTrades.length,
+            closedTrades: closedTrades.length,
+            avgTradeDuration,
+            bestTrade: {
+                symbol: bestTrade.symbol,
+                profitLoss: bestTrade.profitLoss,
+                profitLossPercentage: bestTrade.profitLossPercentage
+            },
+            worstTrade: {
+                symbol: worstTrade.symbol,
+                profitLoss: worstTrade.profitLoss,
+                profitLossPercentage: worstTrade.profitLossPercentage
+            },
+            currentOpenPositions: openTrades.map(t => ({
+                symbol: t.symbol,
+                entryPrice: t.entryPrice,
+                currentPrice: t.entryPrice, // This should be updated with current price
+                entryMarketCap: t.entryMarketCap,
+                currentMarketCap: t.currentMarketCap || t.entryMarketCap,
+                profitLoss: 0, // This should be calculated based on current price
+                profitLossPercentage: 0 // This should be calculated based on current price
+            }))
         };
+
+        // Create a detailed text description of the portfolio state
+        const text = [
+            `Portfolio Update - Current State`,
+            `Current Balance: $${portfolio.currentBalance.toFixed(2)} (${((portfolio.currentBalance / portfolio.initialBalance - 1) * 100).toFixed(2)}% change from initial)`,
+            `Initial Balance: $${portfolio.initialBalance.toFixed(2)}`,
+            `Risk Management:`,
+            `- Active Positions: ${portfolio.trades.filter(t => t.status === 'OPEN').length} of ${portfolio.maxActivePositions} max`,
+            `- Position Size Limit: ${(portfolio.maxPositionSize * 100).toFixed(0)}% of portfolio`,
+            `- Portfolio Floor: ${(portfolio.minPortfolioThreshold * 100).toFixed(0)}% of initial balance`,
+            `Performance Statistics:`,
+            `- Total Trades: ${portfolio.stats.totalTrades}`,
+            `- Win Rate: ${portfolio.stats.winRate.toFixed(2)}%`,
+            `- Total P/L: $${portfolio.stats.totalPnL.toFixed(2)}`,
+            `- Average P/L: $${portfolio.stats.avgPnL.toFixed(2)}`,
+            `- Best Trade: ${portfolio.stats.bestTrade.symbol} (${portfolio.stats.bestTrade.profitLossPercentage.toFixed(2)}%)`,
+            `- Worst Trade: ${portfolio.stats.worstTrade.symbol} (${portfolio.stats.worstTrade.profitLossPercentage.toFixed(2)}%)`,
+            `- Max Drawdown: ${portfolio.stats.maxDrawdownPercentage.toFixed(2)}%`,
+            `Active Trades:`,
+            ...portfolio.trades
+                .filter(t => t.status === 'OPEN')
+                .map(t => `  - ${t.symbol}: Entry $${t.entryPrice.toFixed(6)}, Amount: $${t.entryAmount.toFixed(2)}, Stop Loss: $${t.stopLossPrice.toFixed(6)}, Take Profit: $${t.takeProfitPrice.toFixed(6)}`)
+        ].join('\n');
+
+        // Ensure we have valid text content for embedding
+        if (!text.trim()) {
+            elizaLogger.error('Cannot create portfolio memory: Empty text content');
+            return;
+        }
+
+        // First, try to remove any existing portfolio memories to prevent duplicates
+        try {
+            const existingMemories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalPortfolioRoomId] });
+            for (const memory of existingMemories) {
+                if (memory.id) {
+                    await this.runtime.messageManager.removeMemory(memory.id);
+                }
+            }
+        } catch (error) {
+            elizaLogger.error('Failed to remove existing portfolio memories:', error);
+        }
+
+        const memory = {
+            id: stringToUuid(`portfolio-${Date.now()}`),
+            userId: this.runtime.agentId,
+            agentId: this.runtime.agentId,
+            roomId: this.globalPortfolioRoomId,
+            content: {
+                text,
+                metadata: portfolio
+            },
+            createdAt: Date.now()
+        };
+
+        try {
+            // Try to create memory without embedding first
+            await this.runtime.messageManager.createMemory(memory, true);
+            logger.portfolio.updated(
+                portfolio.currentBalance,
+                portfolio.initialBalance,
+                portfolio.trades.length,
+                portfolio.stats.winRate
+            );
+        } catch (error) {
+            elizaLogger.error('Failed to create portfolio memory:', error);
+            // If that fails, try to create with embedding
+            try {
+                await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
+            } catch (embeddingError) {
+                elizaLogger.error('Failed to create portfolio memory with embedding:', embeddingError);
+            }
+        }
     }
 
     async getPortfolio(): Promise<Portfolio> {
@@ -182,7 +266,21 @@ export class LearningService {
                     avgWin: 0,
                     avgLoss: 0,
                     maxDrawdown: 0,
-                    maxDrawdownPercentage: 0
+                    maxDrawdownPercentage: 0,
+                    activeTrades: 0,
+                    closedTrades: 0,
+                    avgTradeDuration: 0,
+                    bestTrade: {
+                        symbol: '',
+                        profitLoss: 0,
+                        profitLossPercentage: 0
+                    },
+                    worstTrade: {
+                        symbol: '',
+                        profitLoss: 0,
+                        profitLossPercentage: 0
+                    },
+                    currentOpenPositions: []
                 }
             };
 
@@ -201,7 +299,7 @@ export class LearningService {
         const latest = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0];
         const portfolio = latest.content.metadata as Portfolio;
 
-        // Ensure portfolio has the new fields (for backward compatibility)
+        // Ensure portfolio has all required fields (for backward compatibility)
         if (!portfolio.maxActivePositions) portfolio.maxActivePositions = 3;
         if (!portfolio.maxPositionSize) portfolio.maxPositionSize = 0.2;
         if (!portfolio.minPortfolioThreshold) portfolio.minPortfolioThreshold = 0.6;
@@ -216,152 +314,153 @@ export class LearningService {
                 avgWin: 0,
                 avgLoss: 0,
                 maxDrawdown: 0,
-                maxDrawdownPercentage: 0
+                maxDrawdownPercentage: 0,
+                activeTrades: 0,
+                closedTrades: 0,
+                avgTradeDuration: 0,
+                bestTrade: {
+                    symbol: '',
+                    profitLoss: 0,
+                    profitLossPercentage: 0
+                },
+                worstTrade: {
+                    symbol: '',
+                    profitLoss: 0,
+                    profitLossPercentage: 0
+                },
+                currentOpenPositions: []
             };
-            // Update stats based on existing trades
-            this.updatePortfolioStats(portfolio);
         }
 
         return portfolio;
     }
 
-    // Sets up a global room for storing prediction summaries
     private async initializeGlobalRoom() {
-        try {
-            try {
-                // Ensure the room exists in Eliza's memory system
-                await this.runtime.ensureRoomExists(this.globalSummaryRoomId);
-                elizaLogger.info("Created global summary room:", { roomId: this.globalSummaryRoomId });
-            } catch (error: any) {
-                // Handle case where room already exists (UNIQUE constraint)
-                if (error?.message?.includes("UNIQUE constraint failed")) {
-                    elizaLogger.info("Global summary room already exists:", { roomId: this.globalSummaryRoomId });
-                } else {
-                    throw error; // Rethrow unexpected errors
+        await this.runtime.ensureRoomExists(this.globalSummaryRoomId);
+        await this.runtime.ensureParticipantInRoom(this.runtime.agentId, this.globalSummaryRoomId);
+    }
+
+    async recordPredictionSummary(tokenId: string, summary: PredictionResult): Promise<void> {
+        const text = [
+            `Token Prediction Summary for ${tokenId}`,
+            `Initial Market Cap: $${summary.results.initialMarketCap.toLocaleString()}`,
+            `Final Market Cap: $${summary.results.finalMarketCap.toLocaleString()}`,
+            `Max Market Cap: $${summary.results.maxMarketCap.toLocaleString()}`,
+            `Target Achieved: ${summary.results.achievedTarget ? 'Yes' : 'No'}`,
+            `MAPE: ${summary.results.mape.toFixed(2)}%`,
+            `Decision: ${summary.prediction.entryDecision}`,
+            `Confidence: ${(summary.prediction.confidence * 100).toFixed(2)}%`,
+            `Supporting Factors: ${summary.prediction.supportingFactors.join(', ')}`,
+            `Risk Factors: ${summary.prediction.riskFactors.join(', ')}`,
+            `Reflection: ${summary.reflection || 'No reflection available'}`
+        ].join('\n');
+
+        const memory = {
+            id: stringToUuid(`prediction-${tokenId}-${Date.now()}`),
+            userId: this.runtime.agentId,
+            agentId: this.runtime.agentId,
+            roomId: this.globalSummaryRoomId,
+            content: {
+                text,
+                metadata: {
+                    ...summary,
+                    results: {
+                        ...summary.results,
+                        achievedTarget: summary.results.achievedTarget
+                    }
+                }
+            },
+            createdAt: Date.now()
+        };
+
+        await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
+    }
+
+    async getRecentPredictions(limit: number = 5): Promise<string> {
+        const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
+        const sortedMemories = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+        const recentMemories = sortedMemories.slice(0, limit);
+
+        if (recentMemories.length === 0) {
+            return "No recent predictions available.";
+        }
+
+        return recentMemories.map(memory => memory.content.text).join('\n\n');
+    }
+
+    async getHistoricalAccuracy(): Promise<{
+        percentage: number;
+        count: number;
+        avgMape: number;
+    }> {
+        const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
+        const predictions = memories
+            .filter(m => m.content.text.includes('Token Prediction Summary for'))
+            .map(m => m.content.metadata as PredictionResult);
+
+        if (predictions.length === 0) {
+            return { percentage: 0, count: 0, avgMape: 0 };
+        }
+
+        const achievedTargets = predictions.filter(p => p.results.achievedTarget).length;
+        const totalMape = predictions.reduce((sum, p) => sum + p.results.mape, 0);
+
+        return {
+            percentage: (achievedTargets / predictions.length) * 100,
+            count: predictions.length,
+            avgMape: totalMape / predictions.length
+        };
+    }
+
+    async getDecisionAccuracy(): Promise<{
+        buy: { percentage: number; correct: number; total: number };
+        ignore: { percentage: number; correct: number; total: number };
+        overall: { percentage: number; correct: number; total: number };
+    }> {
+        const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
+        const predictions = memories
+            .filter(m => m.content.text.includes('Token Prediction Summary for'))
+            .map(m => m.content.metadata as PredictionResult)
+            .filter(p => p.prediction.entryDecision && typeof p.results.achievedTarget === 'boolean');
+
+        let buyCorrect = 0;
+        let buyTotal = 0;
+        let ignoreCorrect = 0;
+        let ignoreTotal = 0;
+
+        for (const prediction of predictions) {
+            if (prediction.prediction.entryDecision === 'BUY') {
+                buyTotal++;
+                if (prediction.results.achievedTarget) {
+                    buyCorrect++;
+                }
+            } else if (prediction.prediction.entryDecision === 'IGNORE') {
+                ignoreTotal++;
+                if (prediction.results.achievedTarget) {
+                    ignoreCorrect++;
                 }
             }
-            // Ensure the agent is a participant in the room
-            await this.runtime.ensureParticipantInRoom(this.runtime.agentId, this.globalSummaryRoomId);
-            elizaLogger.success("Initialized global summary room:", { roomId: this.globalSummaryRoomId });
-        } catch (error) {
-            elizaLogger.error("Failed to initialize global summary room:", error);
-            throw error; // Propagate error to caller
         }
-    }
 
-    // Records a prediction summary in the global room
-    async recordPredictionSummary(tokenId: string, summary: PredictionResult): Promise<void> {
-        try {
-            // Create memory object with summary details
-            const memory = {
-                id: stringToUuid(`global-summary-${tokenId}`), // Unique ID for this token's summary
-                userId: this.runtime.agentId,
-                agentId: this.runtime.agentId,
-                roomId: this.globalSummaryRoomId,
-                content: {
-                    text: `Prediction Summary for ${tokenId}\nDecision: ${summary.prediction.entryDecision}\nAchieved: ${summary.results.achievedTarget}\nReflection: ${summary.reflection}, Lessons Learned: ${summary.lessonsLearned?.join(", ") ?? "None"}`,
-                    metadata: summary // Full PredictionResult stored in metadata
-                },
-                createdAt: Date.now()
-            };
+        const total = buyTotal + ignoreTotal;
+        const totalCorrect = buyCorrect + ignoreCorrect;
 
-            // Add embedding and store in memory
-            await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(memory), true);
-            elizaLogger.success("Recorded global prediction summary:", {
-                tokenId,
-                achievedTarget: summary.results.achievedTarget,
-                reflection: summary.reflection
-            });
-        } catch (error) {
-            elizaLogger.error("Failed to record global summary:", { tokenId, error });
-            throw error; // Let caller handle the failure
-        }
-    }
-
-    // Retrieves a formatted string of recent prediction summaries
-    async getRecentPredictions(limit: number = 5): Promise<string> {
-        try {
-            // Fetch all memories from the global summary room
-            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({ roomIds: [this.globalSummaryRoomId] });
-            if (memories.length === 0) return "No recent predictions available.";
-
-            // Sort by creation time (newest first) and take the top `limit`
-            const sortedMemories = memories.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-            return sortedMemories.slice(0, limit).map(m => {
-                const { prediction, results, reflection, lessonsLearned } = m.content.metadata as PredictionResult;
-                // Format per-step results for detailed output
-                const perStepResults = results.mapePerStep?.map(step =>
-                    `      ${step.time}: Target ${prediction.marketCapPredictions[step.time as keyof typeof prediction.marketCapPredictions]} ` +
-                    `(${step.achieved ? "✓" : "✗"}, MAPE: ${(step.mape * 100).toFixed(2)}%)`
-                ).join('\n') ?? '';
-
-                // Construct human-readable summary string
-                return `Token Prediction (${new Date(m.createdAt ?? Date.now()).toISOString()}):
-                        - Decision: ${prediction.entryDecision}
-                        - Reasoning: ${prediction.reasoning}
-                        - Target (10min): ${prediction.marketCapPredictions["10min"]}
-                        - Actual Final: ${results?.finalMarketCap ?? 'N/A'}
-                        - Achieved Target: ${results?.achievedTarget ? "Yes" : "No"}
-                        - MAPE: ${results?.mape ? (results.mape * 100).toFixed(2) : 'N/A'}%
-                        - Per-step Results:\n${perStepResults}
-                        - Reflection: ${reflection ?? "No reflection available"}
-                        - Lessons Learned: ${lessonsLearned?.join(", ") ?? "None"}
-                        - Risk Factors: ${prediction.riskFactors.join(', ')}
-                        - Supporting Factors: ${prediction.supportingFactors.join(', ')}`;
-            }).join("\n\n"); // Separate each prediction with double newline
-        } catch (error) {
-            elizaLogger.error("Failed to get recent predictions:", error);
-            return "Error retrieving recent predictions."; // Fallback message
-        }
-    }
-
-    // Calculates historical accuracy and average MAPE from stored summaries
-    async getHistoricalAccuracy(): Promise<{ percentage: number; count: number; avgMape: number }> {
-        try {
-            // Fetch all memories from the global summary room
-            const memories = await this.runtime.messageManager.getMemoriesByRoomIds({
-                roomIds: [this.globalSummaryRoomId]
-            });
-            // elizaLogger.info('Fetched memories for global summary:', { count: memories.length, roomId: this.globalSummaryRoomId });
-
-            if (memories.length === 0) return { percentage: 0, count: 0, avgMape: 0 }; // Default for empty history
-
-            const results = memories.map(m => m.content.metadata as PredictionResult);
-            // Count correct predictions (where target was achieved)
-            const correctPredictions = results.filter(r => r.results.achievedTarget).length;
-            const percentage = results.length > 0 ? (correctPredictions / results.length) * 100 : 0;
-            // Average MAPE across all predictions
-            const avgMape = results.length > 0 ? results.reduce((sum, r) => sum + (r.results.mape || 0), 0) / results.length : 0;
-
-            // Calculate average MAPE per time step for deeper insight
-            const mapeByStep: { [key: string]: number[] } = {};
-            results.forEach(r => {
-                r.results.mapePerStep?.forEach(step => {
-                    if (!mapeByStep[step.time]) mapeByStep[step.time] = [];
-                    mapeByStep[step.time].push(step.mape);
-                });
-            });
-
-            const avgMapeByStep = Object.entries(mapeByStep).map(([time, mapes]) => ({
-                time,
-                avgMape: mapes.reduce((sum, mape) => sum + mape, 0) / mapes.length
-            }));
-
-            // Log detailed stats for monitoring
-            elizaLogger.info("Historical accuracy calculated:", {
-                total: results.length,
-                correct: correctPredictions,
-                percentage: percentage.toFixed(2),
-                avgMape: avgMape.toFixed(4),
-                avgMapeByStep: avgMapeByStep.map(s =>
-                    `${s.time}: ${(s.avgMape * 100).toFixed(2)}%`
-                )
-            });
-
-            return { percentage, count: results.length, avgMape };
-        } catch (error) {
-            elizaLogger.error("Failed to calculate historical accuracy:", error);
-            return { percentage: 0, count: 0, avgMape: 0 }; // Fallback for errors
-        }
+        return {
+            buy: {
+                percentage: buyTotal > 0 ? (buyCorrect / buyTotal) * 100 : 0,
+                correct: buyCorrect,
+                total: buyTotal
+            },
+            ignore: {
+                percentage: ignoreTotal > 0 ? (ignoreCorrect / ignoreTotal) * 100 : 0,
+                correct: ignoreCorrect,
+                total: ignoreTotal
+            },
+            overall: {
+                percentage: total > 0 ? (totalCorrect / total) * 100 : 0,
+                correct: totalCorrect,
+                total: total
+            }
+        };
     }
 }

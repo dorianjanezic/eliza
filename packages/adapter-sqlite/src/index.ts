@@ -16,6 +16,7 @@ import { Database } from "better-sqlite3";
 import { v4 } from "uuid";
 import { load } from "./sqlite_vec.ts";
 import { sqliteTables } from "./sqliteTables.ts";
+import { loadVecExtensions } from "./sqlite_vec.ts";
 
 export interface TokenMetadata {
     [key: string]: unknown;
@@ -51,13 +52,6 @@ export interface TokenDataRecord {
     isInitialCheck: number;
     checkType: string;
     predictionResultId?: string;
-    tradeId?: string;
-    entryPrice?: number;
-    entryTime?: string;
-    exitPrice?: number;
-    exitTime?: string;
-    profitLoss?: number;
-    profitLossPercent?: number;
     agentId: string;
 }
 
@@ -125,10 +119,11 @@ export class SqliteDatabaseAdapter
     constructor(db: Database) {
         super();
         this.db = db;
-        load(db);
+        loadVecExtensions(this.db);  // Load sqlite-vec extension once in constructor
     }
 
     async init() {
+        // Create tables
         this.db.exec(sqliteTables);
     }
 
@@ -828,8 +823,7 @@ export class SqliteDatabaseAdapter
                 uniqueTraders1h, trades1h, topHolderPercent, topHolders, suspiciousDistribution,
                 totalBundles, totalSolSpent, currentHeldPercentage, totalBundledPercentage,
                 ohlcvData, twitterSentiment, currentPrediction, checkNumber,
-                isInitialCheck, checkType, predictionResultId, tradeId, entryPrice, entryTime,
-                exitPrice, exitTime, profitLoss, profitLossPercent, agentId
+                isInitialCheck, checkType, predictionResultId, agentId
             ) VALUES (
                 ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
@@ -865,13 +859,6 @@ export class SqliteDatabaseAdapter
             data.isInitialCheck,
             data.checkType,
             data.predictionResultId,
-            data.tradeId,
-            data.entryPrice,
-            data.entryTime,
-            data.exitPrice,
-            data.exitTime,
-            data.profitLoss,
-            data.profitLossPercent,
             data.agentId
         );
     }

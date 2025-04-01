@@ -21,6 +21,11 @@ Respond with ONLY a JSON code block:
 
 ---
 
+### Trade Outcome (if executed)
+{{tradeOutcome}}
+
+---
+
 ### Actual Results (Checks with Market, Distribution, Bundle, and OHLCV Data)
 {{actualResults}}
 
@@ -43,9 +48,14 @@ Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, a
 ---
 
 ### Guidelines
-- Compare prediction (marketCapPredictions, TP/SL) with checks (marketData.price, ohlcv.close).
-- Assess trade: Did price hit TP or SL? Calculate P/L if closed.
-- Detect rug pulls: >35% drops in marketCap or topHolderPercent, sharp OHLCV price drops with volume spikes.
-- Analyze momentum: Use volume1hUSD, uniqueTraders1h, and ohlcv trends.
+1. First, check the Trade Outcome section to understand how the trade was executed and its result
+2. Compare prediction (marketCapPredictions, TP/SL) with checks (marketData.price, ohlcv.close)
+3. Assess trade:
+   - If trade was executed, use the Trade Outcome data to determine if TP or SL was hit
+   - Calculate P/L if closed
+   - Note the exit reason (Stop Loss, Take Profit, or Other)
+4. Detect rug pulls: >35% drops in marketCap or topHolderPercent, sharp OHLCV price drops with volume spikes
+5. Analyze momentum: Use volume1hUSD, uniqueTraders1h, and ohlcv trends
+6. Ensure your reflection accurately reflects the trade outcome - if a stop loss was hit, say so; if take profit was hit, say so
 ---
 `;

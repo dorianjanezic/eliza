@@ -2,34 +2,33 @@ import { Plugin, IAgentRuntime, Action } from "@ai16z/eliza";
 import { elizaLogger } from "@ai16z/eliza";
 import { TokenMigrationProvider, MarketDataProvider } from "./providers";
 import { TwitterSentimentProvider } from "./providers/TwitterSentimentProvider";
-import { TokenDataProvider } from "./providers/TokenDataProvider";
-import { PredictionService, LearningService, TokenDataService } from "./services";
+import { PredictionService, LearningService } from "./services";
 import * as types from "./types";
 import { Memory, State, HandlerCallback } from "@ai16z/eliza";
 import { TokenData, OHLCVData } from "./types/token";
-import { TokenDataRecord } from "./types/tokenData";
-import { PublicKey } from "@solana/web3.js";
 import { logger } from "./utils/logger";
+import { PublicKey } from "@solana/web3.js";
 
 // Global provider instances to be used across the plugin
 let marketDataProviderInstance: MarketDataProvider | undefined;
 let learningServiceInstance: LearningService | undefined;
 let predictionServiceInstance: PredictionService | undefined;
 let tokenMigrationProviderInstance: TokenMigrationProvider | undefined;
-let tokenDataProviderInstance: TokenDataProvider | undefined;
-let tokenDataServiceInstance: TokenDataService | undefined;
 let twitterSentimentProviderInstance: TwitterSentimentProvider | undefined;
+
 // Flag to track if the plugin has been initialized
 let isPluginInitialized = false;
 // Flag to track if the prediction stream has been started
 let isPredictionStreamActive = false;
-// Flag to track if we're in backtest mode
-let isBacktestMode = false;
 // Request throttling mechanism
-let tokenProcessingQueue: Array<types.TokenData> = [];
-let isProcessingToken = false;
-const MAX_CONCURRENT_TOKENS = 1; // Process only one token at a time
-const TOKEN_PROCESSING_INTERVAL = 30000; // 30 seconds between token processing
+let tokenProcessingQueue: Array<{
+  token: types.TokenData;
+  addedAt: number;
+}> = [];
+let activeProcessingCount = 0;
+const MAX_CONCURRENT_TOKENS = 5; // Allow processing up to 5 tokens simultaneously
+const TOKEN_PROCESSING_INTERVAL = 30000; // 30 seconds between token processing batches
+const TOKEN_PROCESSING_DELAY = 60000; // 60 seconds delay before processing new tokens
 
 // Helper function to create and initialize all services only once
 function getOrCreateServices(runtime: IAgentRuntime) {
@@ -42,8 +41,6 @@ function getOrCreateServices(runtime: IAgentRuntime) {
     marketDataProviderInstance = new MarketDataProvider(runtime);
     learningServiceInstance = new LearningService(runtime);
     tokenMigrationProviderInstance = new TokenMigrationProvider(runtime);
-    tokenDataServiceInstance = new TokenDataService(runtime);
-    tokenDataProviderInstance = new TokenDataProvider(runtime);
     twitterSentimentProviderInstance = new TwitterSentimentProvider(runtime);
 
     // Create the prediction service last, injecting all dependencies
@@ -73,8 +70,7 @@ function getOrCreateServices(runtime: IAgentRuntime) {
 
   // Ensure all instances exist before returning
   if (!marketDataProviderInstance || !learningServiceInstance || !predictionServiceInstance ||
-      !tokenMigrationProviderInstance || !tokenDataProviderInstance || !tokenDataServiceInstance ||
-      !twitterSentimentProviderInstance) {
+      !tokenMigrationProviderInstance || !twitterSentimentProviderInstance) {
     throw new Error("Failed to initialize one or more required services");
   }
 
@@ -83,8 +79,6 @@ function getOrCreateServices(runtime: IAgentRuntime) {
     learningService: learningServiceInstance,
     predictionService: predictionServiceInstance,
     tokenMigrationProvider: tokenMigrationProviderInstance,
-    tokenDataProvider: tokenDataProviderInstance,
-    tokenDataService: tokenDataServiceInstance,
     twitterSentimentProvider: twitterSentimentProviderInstance
   };
 }
@@ -97,23 +91,18 @@ function cleanupServices() {
     tokenMigrationProviderInstance = undefined;
   }
 
-  // Also stop token data provider if it's running
-  if (tokenDataProviderInstance) {
-    tokenDataProviderInstance.stop();
-    tokenDataProviderInstance = undefined;
-  }
-
   // Clear all other instances
   marketDataProviderInstance = undefined;
   learningServiceInstance = undefined;
   predictionServiceInstance = undefined;
-  tokenDataServiceInstance = undefined;
   twitterSentimentProviderInstance = undefined;
 
   // Reset initialization flags
   isPluginInitialized = false;
   isPredictionStreamActive = false;
-  isBacktestMode = false;
+
+  // Clear the token processing queue
+  tokenProcessingQueue = [];
 }
 
 // Process token from queue with rate limiting
@@ -122,29 +111,84 @@ async function processNextToken(services: {
   marketDataProvider: MarketDataProvider;
   predictionService: PredictionService;
   learningService: LearningService;
-  tokenDataService: TokenDataService;
-  tokenDataProvider: TokenDataProvider;
   twitterSentimentProvider: TwitterSentimentProvider;
 }) {
-  if (isProcessingToken || tokenProcessingQueue.length === 0) {
+  if (activeProcessingCount >= MAX_CONCURRENT_TOKENS || tokenProcessingQueue.length === 0) {
     return;
   }
 
-  isProcessingToken = true;
-  const tokenData = tokenProcessingQueue.shift()!;
+  // Check if the first token in queue has waited long enough
+  const now = Date.now();
+  const nextToken = tokenProcessingQueue[0];
+  if (now - nextToken.addedAt < TOKEN_PROCESSING_DELAY) {
+    // If not waited long enough, schedule next check
+    setTimeout(() => processNextToken(services), 1000);
+    return;
+  }
+
+  activeProcessingCount++;
+  const { token: tokenData } = tokenProcessingQueue.shift()!;
 
   try {
-    // Process the token
-    await services.predictionService.predictToken(tokenData, "", []);
+    // Fetch market data
+    const [marketData, ohlcvData, tweets] = await Promise.all([
+      // Parallel fetching of required data
+      services.marketDataProvider.getTokenMarketData(tokenData.address),
+      services.marketDataProvider.getTokenOHLCVData(
+        tokenData.address,
+        '1m',
+        Math.floor(Date.now() / 1000) - (60 * 60),
+        Math.floor(Date.now() / 1000)
+      ),
+      services.twitterSentimentProvider.getRecentTweetsForToken(tokenData)
+    ]);
 
-    // Emit token processed event
-    services.tokenDataProvider.emit('tokenProcessed', tokenData.tokenId);
+    // Update tokenData with market data
+    const updatedTokenData = {
+      ...tokenData,
+      ...marketData,
+      price: marketData.price,
+      marketCap: marketData.marketCap,
+      holderCount: marketData.holderCount,
+      volume1hUSD: marketData.volume1hUSD,
+      volume24hUSD: marketData.volume24hUSD,
+      priceChange1h: marketData.priceChange1h,
+      priceChange24h: marketData.priceChange24h,
+      uniqueTraders1h: marketData.uniqueTraders1h,
+      trades1h: marketData.trades1h
+    };
+
+    // Process the token with all fetched data
+    await services.predictionService.predictToken(updatedTokenData, tweets, ohlcvData);
+
+    // After successful processing, try to process next token if queue not empty
+    if (tokenProcessingQueue.length > 0) {
+      processNextToken(services);
+    }
   } catch (error) {
     const err = error instanceof Error ? error : new Error('Unknown error processing token');
-    elizaLogger.error(`[BACKTEST] Error processing token ${tokenData.tokenId}: ${err.message}`);
     logger.plugin.error(err);
   } finally {
-    isProcessingToken = false;
+    activeProcessingCount--;
+
+    // Try to process more tokens if queue not empty and below max concurrent
+    if (tokenProcessingQueue.length > 0 && activeProcessingCount < MAX_CONCURRENT_TOKENS) {
+      processNextToken(services);
+    }
+  }
+}
+
+// Helper function to start processing tokens
+function startProcessingTokens(services: {
+  tokenMigrationProvider: TokenMigrationProvider;
+  marketDataProvider: MarketDataProvider;
+  predictionService: PredictionService;
+  learningService: LearningService;
+  twitterSentimentProvider: TwitterSentimentProvider;
+}) {
+  // Start multiple concurrent processors up to MAX_CONCURRENT_TOKENS
+  for (let i = 0; i < Math.min(MAX_CONCURRENT_TOKENS, tokenProcessingQueue.length); i++) {
+    processNextToken(services);
   }
 }
 
@@ -177,13 +221,17 @@ export const startPredictionStream: Action = {
 
     // Set up listener for token updates - with null check
     services.tokenMigrationProvider.on("tokenUpdate", async (tokenData: types.TokenData) => {
-      // Add token to the processing queue instead of processing immediately
-      tokenProcessingQueue.push(tokenData);
-      elizaLogger.info(`Added token to processing queue: ${tokenData.tokenId} (${tokenData.address}) [Queue length: ${tokenProcessingQueue.length}]`);
+      // Add token to the processing queue with timestamp
+      const queueItem = {
+        token: tokenData,
+        addedAt: Date.now()
+      };
+      tokenProcessingQueue.push(queueItem);
+      elizaLogger.info(`Added token to processing queue: ${tokenData.tokenId} (${tokenData.address}) [Queue length: ${tokenProcessingQueue.length}] - Will process after ${TOKEN_PROCESSING_DELAY/1000} seconds`);
 
-      // Start processing if not already processing
-      if (!isProcessingToken) {
-        processNextToken(services);
+      // Start processing if we're below max concurrent tokens
+      if (activeProcessingCount < MAX_CONCURRENT_TOKENS) {
+        startProcessingTokens(services);
       }
     });
 
@@ -215,9 +263,10 @@ export const stopPredictionStream: Action = {
 
 function isValidSolanaAddress(address: string): boolean {
     try {
+        // Attempt to create a PublicKey object
         new PublicKey(address);
         return true;
-    } catch (error) {
+    } catch {
         return false;
     }
 }
@@ -377,107 +426,10 @@ export const predictToken: Action = {
     ],
 } as Action;
 
-export const startBacktestStream: Action = {
-  name: "startBacktestStream",
-  description: "Starts the token prediction backtest stream with historical token data",
-  similes: [],
-  examples: [],
-  validate: async () => true,
-  handler: async (runtime: IAgentRuntime, message: Memory, state?: State, options?: {
-    tokenIds?: string[];
-    limit?: number;
-    emitIntervalMs?: number;
-  }) => {
-    // If the prediction stream is already active, stop it first
-    if (isPredictionStreamActive) {
-      if (isBacktestMode) {
-        elizaLogger.warn("Backtest stream is already running, stopping current stream first");
-      } else {
-        elizaLogger.warn("Live prediction stream is running, stopping before starting backtest stream");
-      }
-
-      if (tokenMigrationProviderInstance) {
-        tokenMigrationProviderInstance.disconnect();
-      }
-
-      if (tokenDataProviderInstance) {
-        tokenDataProviderInstance.stop();
-      }
-
-      isPredictionStreamActive = false;
-    }
-
-    // Initialize all services
-    const services = getOrCreateServices(runtime);
-
-    // Set up event handler for token updates from historical data
-    services.tokenDataProvider.on('tokenUpdate', async (event) => {
-      // Add incoming token to processing queue
-      elizaLogger.info(`[BACKTEST] Token ${event.tokenData.tokenId} queued for processing from historical data`);
-      tokenProcessingQueue.push(event.tokenData);
-
-      // Process token immediately if not already processing
-      if (!isProcessingToken && tokenProcessingQueue.length > 0) {
-        await processNextToken(services);
-      }
-    });
-
-    // Set up completion handler
-    services.tokenDataProvider.on('complete', () => {
-      elizaLogger.success(`[BACKTEST] Backtest stream completed processing all historical tokens`);
-    });
-
-    // Load historical tokens
-    const tokenLimit = options?.limit || 1000; // Default to 10 tokens max
-    const emitInterval = options?.emitIntervalMs || 5000;
-
-    try {
-      const loadOptions: {
-        onlyInitial: boolean;
-        limit: number;
-        tokenIds?: string[];
-      } = {
-        onlyInitial: true,
-        limit: tokenLimit
-      };
-
-      // If specific token IDs were provided, use those instead
-      if (options?.tokenIds && options.tokenIds.length > 0) {
-        loadOptions.tokenIds = options.tokenIds;
-      }
-
-      const tokens = await services.tokenDataProvider.loadTokens(loadOptions);
-
-      elizaLogger.info(`[BACKTEST] Loaded ${tokens.length} historical tokens for backtesting`);
-
-      if (tokens.length === 0) {
-        elizaLogger.error(`[BACKTEST] No historical tokens found for backtesting. Please collect token data first.`);
-        return;
-      }
-
-      // Configure emission interval
-      services.tokenDataProvider.setEmitInterval(emitInterval);
-
-      // Start the backtest stream
-      services.tokenDataProvider.start();
-
-      // Set backtest mode flag
-      isBacktestMode = true;
-      isPredictionStreamActive = true;
-
-      elizaLogger.success(`[BACKTEST] Started token prediction backtest stream with ${tokens.length} tokens at ${emitInterval}ms intervals`);
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error('Unknown error initializing backtest');
-      elizaLogger.error(`[BACKTEST] Failed to start backtest stream: ${err.message}`);
-      logger.plugin.error(err);
-    }
-  }
-};
-
 export const tokenPredictionPlugin: Plugin = {
   name: "Pump.fun Token Prediction Plugin",
   description: "Analyzes and predicts token performance from Pump.fun to Solana",
-  actions: [startPredictionStream, stopPredictionStream, predictToken, startBacktestStream],
+  actions: [startPredictionStream, stopPredictionStream, predictToken],
 };
 
 // And also export the same object as 'plugin' for compatibility

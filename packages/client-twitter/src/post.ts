@@ -253,10 +253,9 @@ export class TwitterPostClient {
                 .map(tweet => `@${tweet.username}: ${tweet.text}`)
                 .join("\n\n");
 
-            // Fetch token memories from telegram room
-            const telegramRoomId = "b5bac0cd-22dc-058a-bdb2-1d301305481e" as `${string}-${string}-${string}-${string}-${string}`;
+
             const tokenMemories = await this.runtime.messageManager.getMemories({
-                roomId: telegramRoomId,
+                roomId:stringToUuid("token-prediction-summaries"),
                 unique: false,
                 count: 4
             });

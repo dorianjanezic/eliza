@@ -4,8 +4,10 @@ import { EventEmitter } from 'events';
 import { elizaLogger, type IAgentRuntime } from '@ai16z/eliza';
 import { TokenUpdateEvent } from '../types/token';
 import { TrenchBundleResponse, BundleInfo } from '../types/bundles';
+import { MarketData, OHLCVData } from '../types/token';
 import axios from 'axios';
 import { logger } from '../utils/logger';
+import { MarketDataProvider } from './MarketDataProvider';
 
 // Predefined public keys for Pump.fun liquidity migrator and token metadata program
 const PUMP_BONDING_CURVE_PROGRAM = new PublicKey('6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P');
@@ -39,6 +41,8 @@ export class TokenMigrationProvider extends EventEmitter {
     private logsSubscriptionId: number | null = null;
     private heartbeatId: number | null = null;
     private lastHeartbeatResponse: number = 0;
+    private readonly PROCESSED_TOKENS_CACHE = new Map<string, number>(); // Cache for processed tokens
+    private readonly TOKEN_PROCESSING_COOLDOWN = 60000; // 1 minute cooldown between processing same token
 
     constructor(private runtime: IAgentRuntime) {
         super();
@@ -183,7 +187,6 @@ export class TokenMigrationProvider extends EventEmitter {
 
     // Analyzes token holder distribution for legitimacy validation
     public async checkTokenDistribution(tokenAddress: string): Promise<{
-        holderCount: number;
         topHolderPercent: number;
         topHolders: Array<{ address: string; amount: number; percentage: number }>;
         suspiciousDistribution: boolean;
@@ -219,7 +222,7 @@ export class TokenMigrationProvider extends EventEmitter {
             holders.sort((a, b) => b.percentage - a.percentage);
 
             // Validate distribution
-            const topHolderPercent = holders[0]?.percentage || 0;
+            const topHolderPercent = holders[1]?.percentage || 0;
             const suspiciousDistribution = topHolderPercent > CONFIG.MAX_TOP_HOLDER_PERCENT;
             const isValid = !suspiciousDistribution;
 
@@ -241,9 +244,8 @@ export class TokenMigrationProvider extends EventEmitter {
             }
 
             return {
-                holderCount: holders.length,
                 topHolderPercent,
-                topHolders: holders.slice(0, 10), // Return top 10 holders
+                topHolders: holders.slice(1, 11), // Return top 10 holders
                 suspiciousDistribution,
                 isValid,
             };
@@ -253,7 +255,6 @@ export class TokenMigrationProvider extends EventEmitter {
 
             // Return default values on error
             return {
-                holderCount: 0,
                 topHolderPercent: 0,
                 topHolders: [],
                 suspiciousDistribution: false,
@@ -443,7 +444,7 @@ export class TokenMigrationProvider extends EventEmitter {
 
                             // Process migration if detected
                             if (isMigrationCandidate) {
-                                await this.processMigrationLogs(logs, signature);
+                                await this.processMigrationLogs(signature, logs);
                             }
                         } catch (error) {
                             logger.error('Error analyzing transaction logs:', {
@@ -517,189 +518,120 @@ export class TokenMigrationProvider extends EventEmitter {
     }
 
     // Process Migration Logs
-    private async processMigrationLogs(logs: string[], signature: string): Promise<void> {
+    private async processMigrationLogs(signature: string, logs: string[]): Promise<void> {
         try {
-            logger.debug('Processing potential migration logs', { signature, logCount: logs.length });
+            elizaLogger.info("Starting to process migration logs", { signature, logCount: logs.length });
 
-            // Look for Migrate instruction from bonding curve program
-            let migrateIndex = -1;
-            for (let i = 0; i < logs.length - 1; i++) {
-                if (logs[i].includes('Program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P invoke') &&
-                    logs[i + 1].includes('Instruction: Migrate')) {
-                    migrateIndex = i;
-                    break;
-                }
-            }
+            // Find token mint address using multiple methods
+            let tokenMint: string | undefined;
 
-            if (migrateIndex === -1) {
-                logger.debug('No Migrate instruction found', { signature });
-                return;
-            }
+            // Skip known system tokens and wSOL
+            const SYSTEM_TOKENS = [
+                'So11111111111111111111111111111111111111112', // wSOL
+                'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
+                'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
+                'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'  // BONK
+            ];
 
-            // Look for create_pool instruction
-            let createPoolIndex = -1;
-            for (let i = 0; i < logs.length - 1; i++) {
-                if (logs[i].includes('Program pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA invoke') &&
-                    logs[i + 1].includes('Instruction: CreatePool')) {
-                    createPoolIndex = i;
-                    break;
-                }
-            }
-
-            if (createPoolIndex === -1) {
-                logger.debug('No create_pool instruction found', { signature });
-                return;
-            }
-
-            // Find the token mint address - it's Account 25 in the transaction
-            let tokenMint: string | null = null;
-            let poolId: string | null = null;
-
-            // Look for Account 25 in the logs
-            for (const log of logs) {
-                if (log.includes('Account 25:')) {
-                    const parts = log.split('Account 25:');
-                    if (parts.length > 1) {
-                        // Extract the address from the account line
-                        const addressMatch = parts[1].match(/\s+([1-9A-HJ-NP-Za-km-z]{32,44})/);
-                        if (addressMatch) {
-                            tokenMint = addressMatch[1];
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Look for Pool ID in the create_pool instruction logs
-            for (let i = createPoolIndex; i < logs.length; i++) {
-                const log = logs[i];
-                if (log.includes('#1 - Pool:')) {
-                    const parts = log.split('#1 - Pool:');
-                    if (parts.length > 1) {
-                        poolId = parts[1].trim();
-                    }
-                }
-            }
-
-            if (!tokenMint || !poolId) {
-                logger.debug('Could not find token mint or pool ID in logs', { signature });
-                return;
-            }
-
-            logger.info('Found token migration details:', {
-                signature,
-                tokenMint,
-                poolId,
-                isAmmPool: true
+            // Method 1: Check postTokenBalances in transaction
+            const tx = await this.connection.getTransaction(signature, {
+                maxSupportedTransactionVersion: 0,
             });
 
-            // Fetch token metadata (name and symbol)
-            let tokenName = 'Unknown';
-            let symbol = 'UNKNOWN';
-            try {
-                // First try to fetch token metadata from on-chain data
-                const [metadataAddress] = PublicKey.findProgramAddressSync(
-                    [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), new PublicKey(tokenMint).toBuffer()],
-                    TOKEN_METADATA_PROGRAM_ID
+            if (tx?.meta?.postTokenBalances) {
+                // Find the first token balance that's not a system token
+                const validTokenBalance = tx.meta.postTokenBalances.find(balance =>
+                    !SYSTEM_TOKENS.includes(balance.mint)
                 );
-                const accountInfo = await this.connection.getAccountInfo(metadataAddress);
-                if (accountInfo?.data) {
-                    const nameLength = accountInfo.data[65];
-                    tokenName = accountInfo.data.slice(66, 66 + nameLength).toString('utf8').replace(/\0/g, '');
-                    symbol = tokenName.slice(0, 6).toUpperCase(); // Derive symbol from name (first 6 chars)
+
+                if (validTokenBalance?.mint) {
+                    tokenMint = validTokenBalance.mint;
+                    elizaLogger.info("Found token mint from postTokenBalances:", { tokenMint });
                 }
-
-                // If metadata fetch failed, try to extract from logs
-                if (tokenName === 'Unknown') {
-                    for (const log of logs) {
-                        // Check for token name patterns in logs
-                        // Common patterns: "Transfer 1000 fukcoin", "Add liquidity fukcoin", etc.
-                        // We're looking for token names that appear after verbs like "Transfer", "Mint", etc.
-                        // Also look for simple "Token: NAME" patterns
-
-                        const tokenNameMatches =
-                            log.match(/Transfer[^a-zA-Z]+([\w]+)/) ||
-                            log.match(/Mint[^a-zA-Z]+([\w]+)/) ||
-                            log.match(/Token:\s*([\w]+)/) ||
-                            log.match(/burn[^a-zA-Z]+([\w]+)/i) ||
-                            log.match(/([a-zA-Z0-9]{3,10})-WSOL/) ||  // Common pattern for LP tokens
-                            log.match(/liquidity[^a-zA-Z]+([\w]+)/i);
-
-                        if (tokenNameMatches && tokenNameMatches[1]) {
-                            // Found a potential token name
-                            tokenName = tokenNameMatches[1];
-                            symbol = tokenName.toUpperCase();
-                            logger.debug('Extracted token name from logs', { tokenName, symbol });
-                            break;
-                        }
-                    }
-                }
-            } catch (error) {
-                logger.error('Error fetching token metadata:', { error: error instanceof Error ? error.message : 'Unknown error' });
-
-                // Fallback to using a name derived from the mint address
-                tokenName = `Token-${tokenMint.substring(0, 6)}`;
-                symbol = tokenMint.substring(0, 4).toUpperCase();
             }
 
-            // Analyze bundling and distribution
-            const bundleAnalysis = await this.analyzeMintAddress(tokenMint);
-            const distribution = await this.checkTokenDistribution(tokenMint);
+            // Method 2: Look for InitializeMint2 instruction
+            if (!tokenMint) {
+                const initMintLog = logs.find(log =>
+                    log.includes("InitializeMint2") ||
+                    log.includes("InitializeMint")
+                );
+                if (initMintLog) {
+                    const mintMatch = initMintLog.match(/mint: ([1-9A-HJ-NP-Za-km-z]{32,44})/);
+                    if (mintMatch && !SYSTEM_TOKENS.includes(mintMatch[1])) {
+                        tokenMint = mintMatch[1];
+                        elizaLogger.info("Found token mint from InitializeMint2:", { tokenMint });
+                    }
+                }
+            }
+
+            // Method 3: Search logs for mint address pattern
+            if (!tokenMint) {
+                for (const log of logs) {
+                    const mintMatch = log.match(/([1-9A-HJ-NP-Za-km-z]{32,44})/);
+                    if (mintMatch && !SYSTEM_TOKENS.includes(mintMatch[1])) {
+                        tokenMint = mintMatch[1];
+                        elizaLogger.info("Found token mint from log pattern:", { tokenMint });
+                        break;
+                    }
+                }
+            }
+
+            if (!tokenMint) {
+                elizaLogger.warn("Could not find token mint in migration logs", { signature });
+                return;
+            }
+
+            // Check if we've processed this token recently
+            const lastProcessed = this.PROCESSED_TOKENS_CACHE.get(tokenMint);
+            if (lastProcessed && Date.now() - lastProcessed < this.TOKEN_PROCESSING_COOLDOWN) {
+                elizaLogger.info("Skipping recently processed token", {
+                    tokenMint,
+                    lastProcessed: new Date(lastProcessed).toISOString(),
+                    cooldownRemaining: Math.ceil((this.TOKEN_PROCESSING_COOLDOWN - (Date.now() - lastProcessed)) / 1000) + "s"
+                });
+                return;
+            }
+
+            // Update cache with current timestamp
+            this.PROCESSED_TOKENS_CACHE.set(tokenMint, Date.now());
+
+            // Fetch additional data
+            const tokenMetadata = await this.fetchTokenMetadata(tokenMint);
+            const bundleAnalysis = await this.analyzeTokenBundles(tokenMint);
+            const distributionAnalysis = await this.checkTokenDistribution(tokenMint);
 
             // Construct token update event
             const tokenUpdate: TokenUpdateEvent = {
                 tokenData: {
                     tokenId: signature,
                     address: tokenMint,
-                    symbol,
-                    name: tokenName,
-                    marketCap: 0, // Initial market cap unknown until trading starts
-                    poolId: poolId, // New field for AMM pool ID
-                    isAmmPool: true, // Flag to indicate this is now an AMM pool
-                    bundleData: bundleAnalysis.success && bundleAnalysis.data ? {
-                        totalBundles: Object.values(bundleAnalysis.data.bundles || {}).filter((b: BundleInfo) => b.holding_amount > 0).length,
-                        totalSolSpent: bundleAnalysis.data.total_sol_spent || 0,
-                        currentHeldPercentage: bundleAnalysis.data.total_holding_percentage || 0,
-                        totalBundledPercentage: bundleAnalysis.data.total_percentage_bundled || 0,
-                    } : {
-                        totalBundles: 0,
-                        totalSolSpent: 0,
-                        currentHeldPercentage: 0,
-                        totalBundledPercentage: 0,
-                    },
-                    creatorRiskProfile: bundleAnalysis.success && bundleAnalysis.data && bundleAnalysis.data.creator_analysis ? {
-                        totalCreated: bundleAnalysis.data.creator_analysis.history?.total_coins_created || 0,
-                        currentTokenHeldPercent: bundleAnalysis.data.creator_analysis.holding_percentage || 0,
-                        devWarnings: (bundleAnalysis.data.creator_analysis.warning_flags || []).filter((w): w is string => w !== null),
-                    } : {
-                        totalCreated: 0,
+                    symbol: tokenMetadata.symbol || "UNKNOWN",
+                    name: tokenMetadata.name || "Unknown Token",
+                    marketCap: 0, // Will be updated by market data provider
+                    bundleData: bundleAnalysis,
+                    creatorRiskProfile: {
+                        totalCreated: 1,
                         currentTokenHeldPercent: 0,
-                        devWarnings: [],
+                        devWarnings: []
                     },
-                    distribution: {
-                        topHolderPercent: distribution.topHolderPercent,
-                        topHolders: distribution.topHolders,
-                        suspiciousDistribution: distribution.suspiciousDistribution,
-                    },
+                    distribution: distributionAnalysis
                 },
-                timestamp: new Date().toISOString(),
+                timestamp: new Date().toISOString()
             };
 
-            // Emit event for downstream processing (e.g., PredictionService)
-            this.emit('tokenUpdate', tokenUpdate.tokenData);
-            logger.info('Token migration to AMM event emitted:', {
+            elizaLogger.info("Token migration to AMM event emitted:", {
                 signature,
                 tokenAddress: tokenMint,
-                poolId,
-                tokenName,
-                symbol,
-                bundleAnalysisSuccess: bundleAnalysis.success,
-                distributionValid: distribution.isValid,
+                tokenName: tokenUpdate.tokenData.name,
+                symbol: tokenUpdate.tokenData.symbol,
+                bundleAnalysisSuccess: !!bundleAnalysis,
+                distributionValid: !distributionAnalysis.suspiciousDistribution
             });
 
+            this.emit('tokenUpdate', tokenUpdate.tokenData);
         } catch (error) {
-            const err = error instanceof Error ? error : new Error('Unknown error');
-            logger.api.error('migration_log_process', err);
+            elizaLogger.error("Error processing migration logs:", { error, signature });
         }
     }
 
@@ -760,6 +692,53 @@ export class TokenMigrationProvider extends EventEmitter {
             connectionStatus: this.isConnected ? 'Connected' : 'Disconnected',
             reconnectAttempts: this.reconnectAttempts
         });
+    }
+
+    private async fetchTokenMetadata(tokenMint: string): Promise<{ name: string; symbol: string }> {
+        try {
+            // First try to fetch token metadata from on-chain data
+            const [metadataAddress] = PublicKey.findProgramAddressSync(
+                [Buffer.from('metadata'), TOKEN_METADATA_PROGRAM_ID.toBuffer(), new PublicKey(tokenMint).toBuffer()],
+                TOKEN_METADATA_PROGRAM_ID
+            );
+            const accountInfo = await this.connection.getAccountInfo(metadataAddress);
+            if (accountInfo?.data) {
+                const nameLength = accountInfo.data[65];
+                const name = accountInfo.data.slice(66, 66 + nameLength).toString('utf8').replace(/\0/g, '');
+                const symbol = name.slice(0, 6).toUpperCase(); // Derive symbol from name (first 6 chars)
+                return { name, symbol };
+            }
+        } catch (error) {
+            elizaLogger.error("Error fetching token metadata:", { error, tokenMint });
+        }
+        return { name: "Unknown Token", symbol: "UNKNOWN" };
+    }
+
+    private async analyzeTokenBundles(tokenMint: string): Promise<{
+        totalBundles: number;
+        totalSolSpent: number;
+        currentHeldPercentage: number;
+        totalBundledPercentage: number;
+    }> {
+        try {
+            const bundleAnalysis = await this.analyzeMintAddress(tokenMint);
+            if (bundleAnalysis.success && bundleAnalysis.data) {
+                return {
+                    totalBundles: Object.values(bundleAnalysis.data.bundles || {}).filter((b: BundleInfo) => b.holding_amount > 0).length,
+                    totalSolSpent: bundleAnalysis.data.total_sol_spent || 0,
+                    currentHeldPercentage: bundleAnalysis.data.total_holding_percentage || 0,
+                    totalBundledPercentage: bundleAnalysis.data.total_percentage_bundled || 0,
+                };
+            }
+        } catch (error) {
+            elizaLogger.error("Error analyzing token bundles:", { error, tokenMint });
+        }
+        return {
+            totalBundles: 0,
+            totalSolSpent: 0,
+            currentHeldPercentage: 0,
+            totalBundledPercentage: 0,
+        };
     }
 }
 

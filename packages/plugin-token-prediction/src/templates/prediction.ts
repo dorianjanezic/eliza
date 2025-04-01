@@ -9,12 +9,17 @@ Respond with ONLY a JSON code block in this exact format:
     "confidence": 0.0,
     "takeProfitPrice": 0, // Only if BUY; based on predicted growth and confidence
     "stopLossPrice": 0,  // Only if BUY; tighter for high-risk tokens
-    "suggestedInvestmentPercentage": 0.0, // Decimal between 0.01-0.2 (1-20% of portfolio)
+    "suggestedInvestmentPercentage": 0.0, // Decimal between 0.01-0.15 (1-15% of portfolio)
     "supportingFactors": ["factor1", "factor2"],
     "riskFactors": ["risk1", "risk2"],
     "reasoning": "Explain your decision here, including TP/SL and investment percentage justification"
 }
 \`\`\`
+
+---
+
+### Historical Knowledge Base
+{{knowledge}}
 
 ---
 
@@ -28,10 +33,18 @@ Respond with ONLY a JSON code block in this exact format:
 
 ---
 
+### Portfolio Status
+{{portfolio}}
+
+---
+
 ### Summaries of Recent Tokens (Prediction and Actual Results)
 {{pastPredictions}}
-
-Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, avg MAPE: {{avgMape}}%).
+Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, avg MAPE: {{avgMape}}%)
+Decision Accuracy:
+- BUY: {{buyPercentage}}% ({{buyCorrect}}/{{buyTotal}} correct)
+- IGNORE: {{ignorePercentage}}% ({{ignoreCorrect}}/{{ignoreTotal}} correct)
+- Overall: {{overallPercentage}}% ({{overallCorrect}}/{{overallTotal}} correct)
 
 ---
 
@@ -42,44 +55,122 @@ Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, a
 
 ### Trading Rules and Guidelines
 1. **Entry Decision**:
-   - **BUY**: Predict growth if momentum is high (e.g., volume1hUSD > marketCap, uniqueTraders1h > 200), distribution is healthy (topHolderPercent < 20%), and sentiment is positive.
-   - **IGNORE**: Predict stagnation/decline if risks dominate (e.g., devWarnings, suspiciousDistribution).
+   - **BUY Criteria** (ALL must be met):
+     - **Volume Analysis**:
+       - Volume1hUSD > marketCap (but not >2x marketCap)
+       - At least 100 unique traders in last hour
+       - Volume must be distributed across multiple candles
+       - No single candle should account for >25% of total volume
+       - Minimum 5 balanced volume candles required
+     - **Price Action Requirements**:
+       - Maximum 30% price increase in any 1-minute candle
+       - No "stair-stepping" pattern detection
+       - No vertical price movements (>40% in 2 minutes)
+       - Minimum 15 minutes of trading history
+       - No more than 2 consecutive red candles
+       - Price should not have dropped >30% in any single candle
+     - **Distribution & Risk**:
+       - TopHolderPercent < 12%
+       - Bundle percentage < 50%
+       - Risk score < 60 (based on weighted factors)
+       - No match with known rug patterns
+       - Predicted growth between 15-40% in 10 minutes
+     - **Market Context**:
+       - Token performance aligns with market averages
+       - No outlier behavior detection
+       - Time of day pattern analysis favorable
+   - **IGNORE Criteria** (ANY of these):
+     - Weak or suspicious social engagement
+     - Any manipulation indicators:
+       - Vertical price movements (>30% in 1 minute)
+       - High volume concentration (>30% in single candle)
+       - Stair-step pattern detection
+       - Wash trading patterns
+       - Suspicious trade size distribution
+     - Less than 15 candles of trading history
+     - TopHolderPercent > 12%
+     - Bundle percentage > 50%
+     - Risk score > 60
+     - Pattern match with known rugs
+     - More than 2 consecutive red candles
+     - Price drop >30% in any single candle
+     - Outlier behavior compared to market averages
 
 2. **Market Cap Predictions**:
-   - Base on current marketCap, adjust with OHLCV trends (uptrend: incremental growth; downtrend: flat/decline).
+   - Base on current marketCap with stricter growth limits:
+     - Maximum 40% growth prediction in 10 minutes
+     - Minimum 15% growth required for BUY decision
+   - Pattern Recognition Adjustments:
+     - Penalize predictions for suspicious patterns
+     - Account for market-wide token performance
+     - Consider time of day effects
+   - Risk-Adjusted Predictions:
+     - Scale predictions based on risk score
+     - Higher risk = more conservative predictions
+     - Account for bundle percentage impact
+   - Success Criteria:
+     - For BUY decisions: Maximum market cap should reach at least 90% of predicted maximum
+     - For IGNORE decisions: Final market cap should not exceed 110% of initial market cap
+     - Predictions should align with the decision rationale and risk assessment
 
 3. **Take Profit (TP) and Stop Loss (SL)** (Only for BUY):
-   - **TP**: Set a target price where profits should be taken, based on predicted market cap growth and confidence.
-   - **SL**: Set a price to limit losses, typically 3-10% below entry, tighter for high-risk tokens.
-   - **Risk-Reward Ratio**: Ensure TP and SL create a favorable risk-reward ratio of at least 1:1 (ideally 2:1 or better).
+   - **TP**: More conservative targets
+     - High confidence: 60-70% of predicted growth
+     - Medium confidence: 40-60% of predicted growth
+     - Low confidence: 20-40% of predicted growth
+   - **SL**: Tighter stops
+     - High risk: 8-12% below entry
+     - Medium risk: 12-15% below entry
+     - Low risk: 15-20% below entry
+   - **Risk-Reward Ratio**: Must be at least 2:1
 
 4. **Confidence**:
-   - High (>0.8): Strong signals, low risk.
-   - Medium (0.5-0.8): Mixed signals.
-   - Low (<0.5): High risk, weak data.
+   - High (>0.8):
+     - All volume criteria met perfectly
+     - No suspicious patterns
+     - Strong market context alignment
+     - Zero high-risk indicators
+   - Medium (0.5-0.8):
+     - Minor pattern concerns
+     - Some market misalignment
+     - Low-risk indicators present
+   - Low (<0.5):
+     - Multiple pattern concerns
+     - Significant market misalignment
+     - Multiple risk indicators
 
 5. **Suggested Investment Percentage**:
-   - Must be provided as a decimal between 0.01 and 0.2 (1-20% of portfolio)
-   - Vary based on:
-     - Confidence: Higher confidence = higher percentage
-     - Risk factors: More risks = lower percentage
-     - Historical accuracy: Lower accuracy = lower percentage
-     - Market volatility: Higher volatility = lower percentage
-   - Examples:
-     - High confidence, low risk = 0.15-0.2 (15-20%)
-     - Medium confidence, moderate risk = 0.07-0.14 (7-14%)
-     - Low confidence, high risk = 0.01-0.06 (1-6%)
+   - Must be between 1-10% of portfolio
+   - Risk-Based Allocation:
+     - High confidence, low risk = 7-10%
+     - Medium confidence, moderate risk = 3-7%
+     - Low confidence, high risk = 1-3%
+   - Additional Factors:
+     - Reduce by 50% if any suspicious patterns
+     - Scale with market context alignment
+     - Consider bundle percentage impact
 
 6. **Risk Management**:
-   - The system will automatically prevent trades if:
-     - Portfolio balance falls below 60% of initial value
-     - Maximum number of concurrent positions is reached
-     - The risk-reward ratio is unfavorable
-     - A trade for this token is already open
+   - System prevents trades if:
+     - Portfolio balance < 80% of initial value
+     - Any suspicious pattern detected
+     - Risk score > 60
+     - Bundle percentage > 50%
+     - Vertical price movements detected
+     - Stair-stepping patterns present
+     - Volume concentration > 30%
+     - Market context misalignment
+     - Time of day pattern unfavorable
 
 7. **Reasoning**:
-   - Clearly explain TP/SL logic and investment percentage recommendation
-   - Analyze potential profit vs. risk based on price targets
+   - Detail pattern analysis results
+   - Explain risk score components
+   - Document bundle percentage impact
+   - Analyze market context alignment
+   - Report suspicious pattern detection
+   - Justify confidence level
+   - Explain volume distribution analysis
+   - Document time of day considerations
 
 ---
 `;

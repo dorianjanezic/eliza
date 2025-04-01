@@ -3,7 +3,6 @@ import type { TokenData, TokenPrediction, PredictionMemory, PredictionCheck, OHL
 import predictionTemplate from '../templates/prediction';
 import { evaluatePredictionTemplate } from '../templates/evaluatePrediction';
 import { LearningService } from './LearningService';
-import { TokenDataService } from './TokenDataService';
 import { MarketDataProvider } from '../providers/MarketDataProvider';
 import TokenMigrationProvider from '../providers/TokenMigrationProvider';
 import { Trade } from '../types/portfolio';
@@ -11,8 +10,6 @@ import { logger, generatePredictionId, generateTradeId } from '../utils/logger';
 
 // Orchestrates token prediction, monitoring, and evaluation
 export class PredictionService {
-    private tokenDataService: TokenDataService;
-
     // Dependencies will be injected rather than created inside
     constructor(
         private runtime: IAgentRuntime,
@@ -22,12 +19,9 @@ export class PredictionService {
     ) {
         // Ensure portfolio is initialized
         this.learningService.initializePortfolio();
-        // Initialize token data service
-        this.tokenDataService = new TokenDataService(runtime);
     }
 
     // Generates a prediction for a token based on initial data
-    // Update predictToken to initiate trade
     async predictToken(tokenData: TokenData, tweets: string, ohlcvData: OHLCVData[]): Promise<TokenPrediction> {
         const roomId = stringToUuid(`token-${tokenData.tokenId}`);
         const predictionId = generatePredictionId(tokenData.tokenId);
@@ -38,37 +32,50 @@ export class PredictionService {
         // Log prediction start
         logger.prediction.start(tokenData.tokenId, predictionId, tokenData.address);
 
-        // Capture initial token data
-        await this.tokenDataService.captureTokenData(
-            {
-                ...tokenData,
-                // Ensure market data fields are populated even if missing from original tokenData
-                holderCount: tokenData.holderCount || 0,
-                volume1hUSD: tokenData.volume1hUSD || 0,
-                volume24hUSD: tokenData.volume24hUSD || 0,
-                priceChange1h: tokenData.priceChange1h || 0,
-                priceChange24h: tokenData.priceChange24h || 0,
-                uniqueTraders1h: tokenData.uniqueTraders1h || 0,
-                trades1h: tokenData.trades1h || 0
-            },
-            'INITIAL',
-            {
-                ohlcvData,
-                isInitialCheck: true,
-                // Include Twitter sentiment if we have tweets
-                ...(tweets && {
-                    twitterSentiment: {
-                        score: 0.5, // Neutral by default
-                        summary: tweets.substring(0, 100) + (tweets.length > 100 ? '...' : ''),
-                        tweetCount: tweets.split('\n').filter(line => line.trim().length > 0).length
-                    }
-                })
-            }
-        );
-
         const pastPredictions = await this.learningService.getRecentPredictions(3);
         const accuracyStats = await this.learningService.getHistoricalAccuracy();
+        const decisionAccuracy = await this.learningService.getDecisionAccuracy();
         const portfolio = await this.learningService.getPortfolio();
+
+        // Calculate portfolio statistics
+        const portfolioStats = {
+            currentBalance: portfolio.currentBalance,
+            initialBalance: portfolio.initialBalance,
+            balanceChange: ((portfolio.currentBalance / portfolio.initialBalance - 1) * 100).toFixed(2),
+            activeTrades: portfolio.trades.filter(t => t.status === 'OPEN').length,
+            maxActivePositions: portfolio.maxActivePositions,
+            totalTrades: portfolio.trades.length,
+            closedTrades: portfolio.trades.filter(t => t.status === 'CLOSED').length,
+            openPositions: portfolio.trades
+                .filter(t => t.status === 'OPEN')
+                .map(t => ({
+                    symbol: t.symbol,
+                    entryPrice: t.entryPrice,
+                    entryMarketCap: t.entryMarketCap,
+                    currentMarketCap: t.currentMarketCap,
+                    profitLoss: t.profitLoss,
+                    profitLossPercentage: t.profitLossPercentage
+                }))
+        };
+
+        // Format decision accuracy data
+        const decisionAccuracyStats = {
+            buy: {
+                percentage: decisionAccuracy.buy.percentage.toFixed(2),
+                correct: decisionAccuracy.buy.correct,
+                total: decisionAccuracy.buy.total
+            },
+            ignore: {
+                percentage: decisionAccuracy.ignore.percentage.toFixed(2),
+                correct: decisionAccuracy.ignore.correct,
+                total: decisionAccuracy.ignore.total
+            },
+            overall: {
+                percentage: decisionAccuracy.overall.percentage.toFixed(2),
+                correct: decisionAccuracy.overall.correct,
+                total: decisionAccuracy.overall.total
+            }
+        };
 
         logger.performance.checkpoint('predict_token', 'data_prepared', tokenData.tokenId, perfTimer.end());
 
@@ -81,11 +88,24 @@ export class PredictionService {
                 pastPredictions,
                 historicalAccuracy: accuracyStats.percentage.toFixed(2),
                 predictionCount: accuracyStats.count,
-                avgMape: (accuracyStats.avgMape * 100).toFixed(2)
+                avgMape: (accuracyStats.avgMape * 100).toFixed(2),
+                buyPercentage: decisionAccuracy.buy.percentage.toFixed(2),
+                buyCorrect: decisionAccuracy.buy.correct,
+                buyTotal: decisionAccuracy.buy.total,
+                ignorePercentage: decisionAccuracy.ignore.percentage.toFixed(2),
+                ignoreCorrect: decisionAccuracy.ignore.correct,
+                ignoreTotal: decisionAccuracy.ignore.total,
+                overallPercentage: decisionAccuracy.overall.percentage.toFixed(2),
+                overallCorrect: decisionAccuracy.overall.correct,
+                overallTotal: decisionAccuracy.overall.total,
+                portfolio: JSON.stringify(portfolioStats, null, 2)
             }
         );
 
         const context = composeContext({ state, template: predictionTemplate });
+
+        // LOG context
+        logger.info('predictToken context:', { context });
 
         // Time LLM prediction
         const llmTimer = logger.performance.start('llm_predict', tokenData.tokenId);
@@ -93,13 +113,6 @@ export class PredictionService {
         const llmDuration = llmTimer.end();
 
         const prediction = this.parseAnalysisResponse(response);
-
-        // Store the prediction to token data
-        await this.tokenDataService.captureTokenData(tokenData, 'INITIAL', {
-            currentPrediction: prediction,
-            isInitialCheck: true,
-            predictionResultId: predictionId
-        });
 
         // Log prediction result
         logger.prediction.result(tokenData.tokenId, predictionId, prediction.entryDecision, prediction.confidence);
@@ -169,12 +182,14 @@ export class PredictionService {
                                     address: tokenData.address,
                                     symbol: tokenData.symbol,
                                     entryPrice: tokenData.price,
+                                    entryMarketCap: tokenData.marketCap,
                                     entryAmount: tradeAmount,
                                     tokenAmount,
                                     takeProfitPrice: prediction.takeProfitPrice,
                                     stopLossPrice: prediction.stopLossPrice,
                                     entryTime: new Date().toISOString(),
                                     profitLoss: 0,
+                                    profitLossPercentage: 0,
                                     status: 'OPEN'
                                 };
 
@@ -235,7 +250,17 @@ export class PredictionService {
             agentId: this.runtime.agentId,
             roomId,
             content: {
-                text: `Token Prediction\nToken: ${tokenData.address}\nDecision: ${prediction.entryDecision}`,
+                text: `Token Prediction Analysis
+Token: ${tokenData.address} (${tokenData.symbol})
+Market Cap: $${tokenData.marketCap.toLocaleString()}
+Price: $${tokenData.price?.toFixed(6) || 'N/A'}
+Decision: ${prediction.entryDecision}
+Confidence: ${(prediction.confidence * 100).toFixed(2)}%
+Reasoning: ${prediction.reasoning}
+Supporting Factors: ${prediction.supportingFactors.join(", ") || "None"}
+Risk Factors: ${prediction.riskFactors.join(", ") || "None"}
+Market Cap Predictions:
+${Object.entries(prediction.marketCapPredictions).map(([time, value]) => `  ${time}: $${value.toLocaleString()}`).join('\n')}`,
                 metadata: {
                     analysis: { token_details: { address: tokenData.address }, prediction },
                     originalToken: tokenData,
@@ -304,26 +329,6 @@ export class PredictionService {
                     tokenAddress, '1m', Math.floor(Date.now() / 1000) - 600, Math.floor(Date.now() / 1000)
                 );
 
-                // Create the token data object for consistency
-                const currentTokenData: TokenData = {
-                    tokenId,
-                    address: tokenAddress,
-                    symbol: marketData.symbol,
-                    name: marketData.symbol, // Use symbol as fallback
-                    marketCap: marketData.marketCap,
-                    price: marketData.price,
-                    distribution: distributionData,
-                    bundleData,
-                    // Include additional market data fields
-                    holderCount: marketData.holderCount,
-                    volume1hUSD: marketData.volume1hUSD,
-                    volume24hUSD: marketData.volume24hUSD,
-                    priceChange1h: marketData.priceChange1h,
-                    priceChange24h: marketData.priceChange24h,
-                    uniqueTraders1h: marketData.uniqueTraders1h,
-                    trades1h: marketData.trades1h
-                };
-
                 // Create the check object
                 const check: PredictionCheck = {
                     timestamp: new Date().toISOString(),
@@ -346,26 +351,8 @@ export class PredictionService {
                     marketData.price || 0
                 );
 
-                // NEW CODE: Check if there's an open trade for this token and evaluate if we should close it
+                // Check if there's an open trade for this token and evaluate if we should close it
                 await this.evaluateOpenTrade(tokenId, marketData.price, ohlcvData);
-
-                // Capture token data for this check
-                const checkTypeMap: Record<number, "2MIN" | "4MIN" | "6MIN" | "8MIN" | "10MIN"> = {
-                    2: "2MIN",
-                    4: "4MIN",
-                    6: "6MIN",
-                    8: "8MIN",
-                    10: "10MIN"
-                };
-
-                const checkType = checkTypeMap[minuteMark];
-                await this.tokenDataService.captureTokenData(currentTokenData, checkType, {
-                    ohlcvData,
-                    checkNumber: minuteMark / 2,
-                    isInitialCheck: false,
-                    predictionResultId: predictionId,
-                    currentPrediction: prediction
-                });
 
                 // If this is the final check or we hit the early stop condition,
                 // create the summary
@@ -386,7 +373,7 @@ export class PredictionService {
         setTimeout(() => checkToken(10), 10 * 60 * 1000);
     }
 
-    // NEW METHOD: Evaluates and potentially closes open trades based on current price
+    // Evaluates and potentially closes open trades based on current price
     private async evaluateOpenTrade(tokenId: string, currentPrice: number | undefined, ohlcvData: OHLCVData[]): Promise<void> {
         if (!currentPrice) return; // Can't evaluate without a price
 
@@ -482,6 +469,8 @@ export class PredictionService {
     ): Promise<{ reflection: string; lessonsLearned: string[] }> {
         const pastPredictions = await this.learningService.getRecentPredictions(3);
         const accuracyStats = await this.learningService.getHistoricalAccuracy();
+        const portfolio = await this.learningService.getPortfolio();
+        const trade = portfolio?.trades.find(t => t.tokenId === tokenData.tokenId);
 
         // Prepare state for LLM evaluation
         const state = await this.runtime.composeState(
@@ -500,11 +489,22 @@ export class PredictionService {
                 pastPredictions,
                 historicalAccuracy: accuracyStats.percentage.toFixed(2),
                 predictionCount: accuracyStats.count,
-                avgMape: (accuracyStats.avgMape * 100).toFixed(2)
+                avgMape: (accuracyStats.avgMape * 100).toFixed(2),
+                tradeOutcome: trade ? JSON.stringify({
+                    status: trade.status,
+                    entryPrice: trade.entryPrice,
+                    exitPrice: trade.exitPrice,
+                    profitLoss: trade.profitLoss,
+                    profitLossPercentage: trade.profitLossPercentage,
+                    exitReason: trade.exitPrice && trade.exitPrice <= trade.stopLossPrice ? 'Stop Loss' :
+                               trade.exitPrice && trade.exitPrice >= trade.takeProfitPrice ? 'Take Profit' :
+                               'Other'
+                }, null, 2) : 'No trade executed'
             }
         );
+
         const context = composeContext({ state, template: evaluatePredictionTemplate });
-        // elizaLogger.info('LLM Input State Evaluate Prediction:', context);
+        elizaLogger.info('Evaluating prediction', { context });
         const response = await generateText({
             runtime: this.runtime,
             context,
@@ -763,55 +763,6 @@ export class PredictionService {
 
         await this.runtime.messageManager.createMemory(await this.runtime.messageManager.addEmbeddingToMemory(summaryMemory), true);
         await this.learningService.recordPredictionSummary(tokenId, summary);
-
-        // After creating the summary, store the FINAL token data record
-        if (checks.length > 0) {
-            const lastCheck = checks[checks.length - 1];
-            const marketData = lastCheck.marketData;
-
-            if (marketData) {
-                // Create a final token data record
-                const finalTokenData: TokenData = {
-                    tokenId,
-                    address: tokenData.address,
-                    symbol: marketData.symbol,
-                    name: marketData.symbol, // Use symbol as fallback
-                    marketCap: marketData.marketCap,
-                    price: marketData.price,
-                    // Ensure distribution has all required fields
-                    distribution: lastCheck.distribution ? {
-                        topHolderPercent: lastCheck.distribution.topHolderPercent,
-                        topHolders: lastCheck.distribution.topHolders,
-                        suspiciousDistribution: false // Set a default value
-                    } : undefined,
-                    bundleData: lastCheck.bundleData,
-                    // Include additional market data fields
-                    holderCount: marketData.holderCount,
-                    volume1hUSD: marketData.volume1hUSD,
-                    volume24hUSD: marketData.volume24hUSD,
-                    priceChange1h: marketData.priceChange1h,
-                    priceChange24h: marketData.priceChange24h,
-                    uniqueTraders1h: marketData.uniqueTraders1h,
-                    trades1h: marketData.trades1h
-                };
-
-                // Capture the final data
-                await this.tokenDataService.captureTokenData(finalTokenData, 'FINAL', {
-                    ohlcvData: lastCheck.ohlcv,
-                    checkNumber: checks.length,
-                    isInitialCheck: false,
-                    predictionResultId: predictionId,
-                    // Add trade data if available
-                    tradeId: trade ? generateTradeId(tokenId) : undefined,
-                    entryPrice: trade?.entryPrice,
-                    entryTime: trade?.entryTime,
-                    exitPrice: adjustedExitPrice || trade?.exitPrice,
-                    exitTime: adjustedExitTime || trade?.exitTime,
-                    profitLoss: adjustedProfitLoss || trade?.profitLoss,
-                    profitLossPercent: trade ? ((adjustedProfitLoss || trade.profitLoss || 0) / (trade.entryAmount || 1)) * 100 : undefined
-                });
-            }
-        }
     }
 
     // Parses LLM response into a TokenPrediction object

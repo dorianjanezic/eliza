@@ -6,6 +6,7 @@ import Layout from './Layout';
 import Chat from './Chat';
 import Character from './Character';
 import TokenPrediction from './components/TokenPrediction';
+import { TokenPredictionDashboard } from './components/TokenPredictionDashboard';
 
 export const router = createBrowserRouter([
   {
@@ -31,6 +32,10 @@ export const router = createBrowserRouter([
       {
         path: 'predict-token',
         element: <TokenPrediction />,
+      },
+      {
+        path: 'token-dashboard',
+        element: <TokenPredictionDashboard />,
       },
     ],
   },
