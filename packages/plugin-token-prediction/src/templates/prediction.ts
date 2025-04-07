@@ -38,6 +38,11 @@ Respond with ONLY a JSON code block in this exact format:
 
 ---
 
+### Similar Token Predictions (Based on Market Cap, Volume, and Holder Count)
+{{similarPredictions}}
+
+---
+
 ### Summaries of Recent Tokens (Prediction and Actual Results)
 {{pastPredictions}}
 Historical Accuracy: {{historicalAccuracy}}% ({{predictionCount}} predictions, avg MAPE: {{avgMape}}%)
@@ -67,8 +72,6 @@ Decision Accuracy:
        - No "stair-stepping" pattern detection
        - No vertical price movements (>40% in 2 minutes)
        - Minimum 15 minutes of trading history
-       - No more than 2 consecutive red candles
-       - Price should not have dropped >30% in any single candle
      - **Distribution & Risk**:
        - TopHolderPercent < 12%
        - Bundle percentage < 50%
@@ -82,8 +85,8 @@ Decision Accuracy:
    - **IGNORE Criteria** (ANY of these):
      - Weak or suspicious social engagement
      - Any manipulation indicators:
-       - Vertical price movements (>30% in 1 minute)
-       - High volume concentration (>30% in single candle)
+       - Vertical price movements (>40% in 1 minute)
+       - High volume concentration (>40% in single candle)
        - Stair-step pattern detection
        - Wash trading patterns
        - Suspicious trade size distribution
@@ -97,9 +100,6 @@ Decision Accuracy:
      - Outlier behavior compared to market averages
 
 2. **Market Cap Predictions**:
-   - Base on current marketCap with stricter growth limits:
-     - Maximum 40% growth prediction in 10 minutes
-     - Minimum 15% growth required for BUY decision
    - Pattern Recognition Adjustments:
      - Penalize predictions for suspicious patterns
      - Account for market-wide token performance
@@ -115,13 +115,13 @@ Decision Accuracy:
 
 3. **Take Profit (TP) and Stop Loss (SL)** (Only for BUY):
    - **TP**: More conservative targets
-     - High confidence: 60-70% of predicted growth
-     - Medium confidence: 40-60% of predicted growth
-     - Low confidence: 20-40% of predicted growth
+     - High confidence: 100-300% of predicted growth
+     - Medium confidence: 50-100% of predicted growth
+     - Low confidence: 30-50% of predicted growth
    - **SL**: Tighter stops
-     - High risk: 8-12% below entry
-     - Medium risk: 12-15% below entry
-     - Low risk: 15-20% below entry
+     - High risk: 15-20% below entry
+     - Medium risk: 20-25% below entry
+     - Low risk: 25-30% below entry
    - **Risk-Reward Ratio**: Must be at least 2:1
 
 4. **Confidence**:
@@ -142,9 +142,9 @@ Decision Accuracy:
 5. **Suggested Investment Percentage**:
    - Must be between 1-10% of portfolio
    - Risk-Based Allocation:
-     - High confidence, low risk = 7-10%
-     - Medium confidence, moderate risk = 3-7%
-     - Low confidence, high risk = 1-3%
+     - High confidence, low risk = 10-15%
+     - Medium confidence, moderate risk = 5-10%
+     - Low confidence, high risk = 3-5%
    - Additional Factors:
      - Reduce by 50% if any suspicious patterns
      - Scale with market context alignment

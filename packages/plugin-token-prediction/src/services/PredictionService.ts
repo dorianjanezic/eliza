@@ -1,4 +1,4 @@
-import { elizaLogger, type IAgentRuntime, ModelClass, generateText, composeContext, stringToUuid, type UUID } from '@ai16z/eliza';
+import { elizaLogger, type IAgentRuntime, ModelClass, generateText, composeContext, stringToUuid, type UUID, Memory } from '@ai16z/eliza';
 import type { TokenData, TokenPrediction, PredictionMemory, PredictionCheck, OHLCVData } from '../types';
 import predictionTemplate from '../templates/prediction';
 import { evaluatePredictionTemplate } from '../templates/evaluatePrediction';
@@ -7,9 +7,12 @@ import { MarketDataProvider } from '../providers/MarketDataProvider';
 import TokenMigrationProvider from '../providers/TokenMigrationProvider';
 import { Trade } from '../types/portfolio';
 import { logger, generatePredictionId, generateTradeId } from '../utils/logger';
+import { TokenSearchService } from './TokenSearchService';
 
 // Orchestrates token prediction, monitoring, and evaluation
 export class PredictionService {
+    private tokenSearchService: TokenSearchService;
+
     // Dependencies will be injected rather than created inside
     constructor(
         private runtime: IAgentRuntime,
@@ -17,12 +20,16 @@ export class PredictionService {
         private marketDataProvider: MarketDataProvider,
         private tokenMigrationProvider: TokenMigrationProvider
     ) {
+        this.tokenSearchService = new TokenSearchService(runtime);
         // Ensure portfolio is initialized
         this.learningService.initializePortfolio();
     }
 
     // Generates a prediction for a token based on initial data
     async predictToken(tokenData: TokenData, tweets: string, ohlcvData: OHLCVData[]): Promise<TokenPrediction> {
+        // Store token data for search before making prediction
+        await this.tokenSearchService.storeTokenForSearch(tokenData);
+
         const roomId = stringToUuid(`token-${tokenData.tokenId}`);
         const predictionId = generatePredictionId(tokenData.tokenId);
 
@@ -31,6 +38,24 @@ export class PredictionService {
 
         // Log prediction start
         logger.prediction.start(tokenData.tokenId, predictionId, tokenData.address);
+
+        // Get similar token predictions with historical data
+        const similarPredictions = await this.getSimilarTokenPredictions(tokenData);
+
+        // Format similar predictions context with historical data
+        const similarPredictionsContext = similarPredictions.map(pred => ({
+            symbol: pred.symbol,
+            marketCap: pred.marketCap,
+            decision: pred.prediction.entryDecision,
+            confidence: pred.prediction.confidence,
+            success: pred.summary?.results?.achievedTarget || false,
+            mape: pred.summary?.results?.mape || 0,
+            similarity: pred.similarity,
+            summary: pred.summary // Include the full summary
+        }));
+
+        // Sort similar predictions by similarity score
+        similarPredictionsContext.sort((a, b) => b.similarity - a.similarity);
 
         const pastPredictions = await this.learningService.getRecentPredictions(3);
         const accuracyStats = await this.learningService.getHistoricalAccuracy();
@@ -86,6 +111,7 @@ export class PredictionService {
                 tweets,
                 ohlcv: JSON.stringify(ohlcvData, null, 2),
                 pastPredictions,
+                similarPredictions: JSON.stringify(similarPredictionsContext, null, 2),
                 historicalAccuracy: accuracyStats.percentage.toFixed(2),
                 predictionCount: accuracyStats.count,
                 avgMape: (accuracyStats.avgMape * 100).toFixed(2),
@@ -504,7 +530,7 @@ ${Object.entries(prediction.marketCapPredictions).map(([time, value]) => `  ${ti
         );
 
         const context = composeContext({ state, template: evaluatePredictionTemplate });
-        elizaLogger.info('Evaluating prediction', { context });
+        // elizaLogger.info('Evaluating prediction', { context });
         const response = await generateText({
             runtime: this.runtime,
             context,
@@ -885,5 +911,149 @@ ${Object.entries(prediction.marketCapPredictions).map(([time, value]) => `  ${ti
                 reasoning: 'Failed to parse prediction response'
             };
         }
+    }
+
+    private async getPrediction(tokenRoomId: UUID): Promise<{ tokenData: TokenData; prediction: TokenPrediction } | null> {
+        const memories = await this.runtime.messageManager.getMemories({
+            roomId: tokenRoomId,
+            count: 1,
+            unique: true
+        });
+
+        if (memories.length > 0) {
+            const memory = memories[0] as PredictionMemory;
+            return {
+                tokenData: memory.content.metadata.originalToken,
+                prediction: memory.content.metadata.analysis.prediction
+            };
+        }
+        return null;
+    }
+
+    private async getSimilarTokenPredictions(tokenData: TokenData): Promise<Array<{
+        tokenId: string;
+        symbol: string;
+        marketCap: number;
+        prediction: TokenPrediction;
+        similarity: number;
+        summary: any; // Full token summary
+    }>> {
+        elizaLogger.info('Starting getSimilarTokenPredictions for token:', {
+            tokenId: tokenData.tokenId,
+            symbol: tokenData.symbol,
+            marketCap: tokenData.marketCap
+        });
+
+        // Find similar tokens using the search service
+        const similarTokens = await this.tokenSearchService.findSimilarTokens(tokenData);
+        elizaLogger.info('Found similar tokens:', {
+            count: similarTokens.length,
+            tokens: similarTokens.map(t => ({
+                tokenId: t.tokenId,
+                symbol: t.symbol,
+                similarity: t.similarity
+            }))
+        });
+
+        const results = [];
+
+        // Get summaries for similar tokens
+        for (const { tokenId, symbol, similarity } of similarTokens) {
+            elizaLogger.info('Processing similar token:', {
+                tokenId,
+                symbol,
+                similarity
+            });
+
+            // Get the token summary directly
+            const summaryMemory = await this.runtime.messageManager.getMemoryById(stringToUuid(`summary-${tokenId}`));
+            // Get the token search data
+            const searchMemory = await this.runtime.messageManager.getMemoryById(stringToUuid(`search-${tokenId}`));
+
+            if (summaryMemory?.content?.metadata &&
+                typeof summaryMemory.content.metadata === 'object' &&
+                'prediction' in summaryMemory.content.metadata &&
+                'results' in summaryMemory.content.metadata &&
+                'reflection' in summaryMemory.content.metadata &&
+                'lessonsLearned' in summaryMemory.content.metadata) {
+
+                elizaLogger.info('Found summary for token:', {
+                    tokenId,
+                    symbol,
+                    hasSummary: true
+                });
+
+                results.push({
+                    tokenId,
+                    symbol,
+                    marketCap: tokenData.marketCap, // Use current token's market cap
+                    prediction: summaryMemory.content.metadata.prediction as TokenPrediction, // Get prediction from summary
+                    similarity,
+                    summary: {
+                        prediction: summaryMemory.content.metadata.prediction as TokenPrediction,
+                        results: summaryMemory.content.metadata.results as {
+                            initialMarketCap: number;
+                            finalMarketCap: number;
+                            maxMarketCap: number;
+                            achievedTarget: boolean;
+                            mape: number;
+                            mapePerStep: { time: string; mape: number; achieved: boolean }[];
+                        },
+                        reflection: summaryMemory.content.metadata.reflection as string,
+                        lessonsLearned: summaryMemory.content.metadata.lessonsLearned as string[]
+                    }
+                });
+            } else if (searchMemory?.content?.metadata) {
+                elizaLogger.info('Found search data for token:', {
+                    tokenId,
+                    symbol,
+                    hasSummary: false
+                });
+
+                // Create a basic prediction from the search data
+                const searchData = (searchMemory.content.metadata as { features: { marketMetrics: { marketCap: number } } }).features;
+                results.push({
+                    tokenId,
+                    symbol,
+                    marketCap: searchData.marketMetrics.marketCap,
+                    prediction: {
+                        entryDecision: 'IGNORE' as const, // Use const assertion to match TokenPrediction type
+                        marketCapPredictions: {
+                            '2min': searchData.marketMetrics.marketCap,
+                            '4min': searchData.marketMetrics.marketCap,
+                            '6min': searchData.marketMetrics.marketCap,
+                            '8min': searchData.marketMetrics.marketCap,
+                            '10min': searchData.marketMetrics.marketCap
+                        },
+                        confidence: 0,
+                        supportingFactors: [],
+                        riskFactors: [],
+                        reasoning: 'No prediction available'
+                    },
+                    similarity,
+                    summary: null
+                });
+            } else {
+                elizaLogger.warn('No data found for token:', {
+                    tokenId,
+                    symbol
+                });
+            }
+        }
+
+        // Sort by similarity score
+        results.sort((a, b) => b.similarity - a.similarity);
+
+        elizaLogger.info('Final results:', {
+            count: results.length,
+            results: results.map(r => ({
+                tokenId: r.tokenId,
+                symbol: r.symbol,
+                similarity: r.similarity,
+                hasSummary: !!r.summary
+            }))
+        });
+
+        return results;
     }
 }
